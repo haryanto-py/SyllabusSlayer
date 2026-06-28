@@ -21,17 +21,24 @@ Next.js (Vercel)  ──HTTPS+JWT──▶  FastAPI (Render)  ──▶  OpenAI 
 
 ## Repo layout
 
+npm workspaces monorepo: teacher and student are **separate Next.js apps** sharing one package; the backend is a **single modular FastAPI service** (teacher/student isolated by RBAC routers).
+
 ```
 SyllabusSlayer/
+├── apps/
+│   ├── teacher/        # Next.js — upload, review, assign, dashboard
+│   └── student/        # Next.js — the roguelike game
+├── packages/
+│   └── shared/         # Zod game schema, API client, types (one source of truth)
 ├── backend/            # FastAPI + SQLModel (the AI pipeline + LMS API)
 │   └── app/
-│       ├── core/       # config, db, security (Supabase JWT)
+│       ├── core/       # config, db, security (Supabase JWT + RBAC deps)
 │       ├── models/     # SQLModel tables (the data model)
 │       ├── schemas/    # Pydantic — incl. the AI-generated game schema
-│       ├── routers/    # API endpoints
+│       ├── routers/    # health, teacher (RBAC), student (RBAC)
 │       └── services/   # ingestion, generation, evals, scoring (M1+)
-├── frontend/           # Next.js client (scaffolded next)
-└── docs/               # build spec + research
+├── docs/               # build spec + research
+└── package.json        # npm workspaces root
 ```
 
 ## Quickstart — backend
@@ -46,9 +53,19 @@ uv run uvicorn app.main:app --reload
 # → http://localhost:8000/docs   ·   GET /health
 ```
 
+## Quickstart — frontend (monorepo)
+
+```bash
+npm install              # from repo ROOT — installs both apps + shared package
+npm run dev:teacher      # teacher app  → http://localhost:3000
+npm run dev:student      # student app  → http://localhost:3001
+# build both: npm run build
+```
+Copy `apps/teacher/.env.local.example` and `apps/student/.env.local.example` → `.env.local` in each.
+
 ## Status
 
-- ✅ **M0 — Scaffold:** backend skeleton, data model, game-content schema, health endpoint.
+- ✅ **M0 — Scaffold:** npm-workspaces monorepo (separate teacher/student Next.js apps + shared package), backend skeleton with teacher/student RBAC routers, data model, game-content schema (Pydantic + Zod mirror), health endpoint. Both apps build; backend smoke-tested.
 - ⬜ **M1 — Ingestion + generation** · ⬜ **M2 — Play one game** · ⬜ **M3 — LMS + dashboard** · ⬜ **M4 — Polish + deploy**
 
 See the roadmap in [`docs/BUILD-SPEC.md`](docs/BUILD-SPEC.md) §9.

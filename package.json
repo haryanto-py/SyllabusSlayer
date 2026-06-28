@@ -1,0 +1,17 @@
+{
+  "name": "syllabusslayer",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:teacher": "npm run dev -w teacher",
+    "dev:student": "npm run dev -w student -- -p 3001",
+    "build": "npm run build -w teacher && npm run build -w student",
+    "build:teacher": "npm run build -w teacher",
+    "build:student": "npm run build -w student",
+    "lint": "npm run lint -w teacher && npm run lint -w student"
+  }
+}
