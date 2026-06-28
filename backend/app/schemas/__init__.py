@@ -1,0 +1,41 @@
+"""Pydantic schemas: API I/O and the AI-generated game content."""
+
+from app.schemas.game import (
+    ActStub,
+    BloomLevel,
+    CampaignOutline,
+    CombatConfig,
+    Difficulty,
+    EncounterCombat,
+    EncounterKind,
+    EncounterStub,
+    MatchPair,
+    Option,
+    OrderedItem,
+    Question,
+    QuestionBatch,
+    QuestionType,
+    Reward,
+    RewardKind,
+    SCHEMA_VERSION,
+)
+
+__all__ = [
+    "ActStub",
+    "BloomLevel",
+    "CampaignOutline",
+    "CombatConfig",
+    "Difficulty",
+    "EncounterCombat",
+    "EncounterKind",
+    "EncounterStub",
+    "MatchPair",
+    "Option",
+    "OrderedItem",
+    "Question",
+    "QuestionBatch",
+    "QuestionType",
+    "Reward",
+    "RewardKind",
+    "SCHEMA_VERSION",
+]

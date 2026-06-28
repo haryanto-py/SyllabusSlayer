@@ -1,0 +1,777 @@
+[
+  {
+    "dimension": "Lightweight web game framework / rendering approach for the roguelike quiz-RPG client (inside Next.js + React/TypeScript)",
+    "summary": "SyllabusSlayer's \"combat\" is turn-based, menu- and text-driven: students read a question, pick/type an answer, and the UI plays animated feedback (damage numbers, HP bars, streak multipliers, boss reactions, level-up/relic toasts). That is fundamentally a reactive UI with juicy animations, NOT a real-time game loop with physics, collision, or a sprite-heavy scene graph. A full canvas game engine (Phaser, KAPLAY, Excalibur) buys you a render loop, ECS, physics, and input handling you will mostly fight against here, while imposing SSR-hostile, browser-only globals and large client bundles. The strongest fit is plain React + Tailwind + Motion (formerly Framer Motion) for presentation, with a deterministic combat engine modeled as an explicit state machine (XState) holding domain state in Zustand. This keeps the whole client SSR-friendly, tiny, testable, easy to demo on a free-tier host, and lets the AI-engineering story (structured generation, evals, guardrails) stay front and center instead of being buried under engine boilerplate. Reserve a canvas renderer (PixiJS) only as an optional, lazily-loaded \"boss arena\" sprite layer if you later want particle effects beyond what CSS/Motion give you. All five candidate libraries are MIT-licensed and actively maintained in 2026; the decision is about fit, not licensing or abandonment risk.",
+    "options": [
+      {
+        "name": "Plain React + Tailwind + Motion (formerly Framer Motion) — NO game engine [RECOMMENDED]",
+        "whatItIs": "Build combat as ordinary React components (HP bars, question cards, answer buttons, boss portrait, damage/streak toasts) styled with Tailwind, animated with Motion's declarative motion components, AnimatePresence (enter/exit), layout animations, and spring/keyframe transitions. No canvas, no render loop. Domain/combat logic lives in a deterministic TypeScript module driven by a state machine + store.",
+        "pros": "Zero impedance mismatch with the actual game (turn-based, UI/text-heavy). First-class SSR/App Router support — components are plain React, and Motion works in client components without browser-only init quirks. Tiny, controllable bundle: Motion's heavy `motion` component is ~34kb but drops to ~4.6kb initial via `LazyMotion`+`m`, and `useAnimate` mini is just 2.3kb (MIT). Accessibility (keyboard nav, screen readers, focus) is native HTML — important for an LMS used in schools. Trivially testable combat logic (pure functions + state machine) supports your evals/guardrails story. Fastest path to a polished, demo-able portfolio piece; easiest to deploy on Vercel/Netlify free tiers. Reuses the same component system as the teacher dashboard/LMS.",
+        "cons": "No built-in particle systems, spritesheet animation, or shaders — heavy 'game feel' VFX (explosions, screen shake beyond CSS, thousands of particles) require hand-rolling or adding a small renderer later. You implement the combat loop/tweening orchestration yourself (but it's turn-based, so this is sequencing, not a 60fps loop). Less 'I used a game engine' signaling on a resume, though arguably 'I built a clean state-machine-driven game in React' signals stronger engineering.",
+        "fitForProject": "Best fit. Matches the turn-based, question-driven combat exactly, keeps the client SSR-safe and lightweight, maximizes demo polish per hour, and lets the AI pipeline be the star. Add PixiJS later only if you crave canvas-grade VFX."
+      },
+      {
+        "name": "Phaser 4",
+        "whatItIs": "A full, batteries-included 2D HTML5 game framework (scenes, input, audio, tweens, multiple physics engines, asset loader, sprite/text rendering). Phaser 4.0 'Caladan' shipped April 10 2026 with a brand-new WebGL renderer; latest is v4.2.0 (late June 2026). MIT.",
+        "pros": "Most mature, largest community and template ecosystem (official React/Next.js integration guidance and 40+ framework templates). Powerful tweens, particles, audio, and scene management if you ever want spectacle. Phaser 4 ships AI-agent skills for coding assistants. Strong resume name recognition.",
+        "cons": "Heaviest option: full build ~400–500KB gzipped (modular minimum ~80KB, but you lose features). Runs its own canvas/WebGL render loop and scene graph — overkill for a turn-based menu game; you'd mostly use it as an expensive renderer. Browser-only: must be client-only mounted (dynamic import ssr:false inside a 'use client' wrapper) and bridged to React state via refs/events, adding boilerplate. Canvas-rendered UI is harder to make accessible/keyboard-navigable than HTML — a real concern for an LMS. Mixing Phaser-rendered combat with React/Tailwind dashboard means two UI paradigms.",
+        "fitForProject": "Overkill. Justified only if combat became real-time/action-y. For menu-driven quiz combat the bundle, SSR friction, and accessibility cost outweigh the benefits."
+      },
+      {
+        "name": "PixiJS v8",
+        "whatItIs": "A fast, low-level 2D WebGL/WebGPU rendering library (sprites, text, filters, masks, blend modes) — a renderer, NOT a game framework. No physics/input/audio/scene-management; you add those yourself. v8 is a single tree-shakeable package (`pixi.js`); current ~v8.18–8.19 (June 2026). MIT.",
+        "pros": "Smaller, more modular footprint than Phaser (single-package, tree-shakeable in v8; core ~150KB gzipped class, less with selective imports). Excellent raw rendering perf for particles/VFX. Pairs well as an OPTIONAL, lazily-loaded effects/'boss arena' canvas layer on top of a React UI rather than owning the whole screen. Crossed 500k weekly npm downloads — very healthy.",
+        "cons": "It's only a renderer — you still build all game logic, input, and tweening yourself, so as a standalone choice it's more work, not less. Same SSR/browser-only constraints as Phaser (client-only mount, ref bridging). Using it for the whole UI reintroduces the canvas-accessibility problem. For a text-heavy quiz, you'd be rendering text/buttons on canvas that the DOM does better.",
+        "fitForProject": "Good as a secondary effects layer (lazy-loaded particle/screen-shake canvas behind the React combat HUD), not as the primary client. Recommended fallback if VFX ambitions outgrow CSS/Motion."
+      },
+      {
+        "name": "KAPLAY (formerly Kaboom.js)",
+        "whatItIs": "A friendly, beginner-oriented HTML5 game library (JS/TS), the actively-maintained successor/fork of the abandoned Kaboom.js (Replit dropped Kaboom in 2024). Latest 4000.x alpha (e.g. 4000.0.0-alpha.27.1, May 2026), ~1.7k GitHub stars, MIT, has a 2026 roadmap.",
+        "pros": "Very fast to prototype tiny games; concise, fun API; TS typings; runs entirely in browser. Good for game jams and quick sprites/scenes.",
+        "cons": "Still on a 4000.x ALPHA line in 2026 — API churn risk for a portfolio piece you want stable. Smaller ecosystem/community than Phaser/Pixi; fewer Next.js integration references. Like all canvas engines: browser-only, client-only mount, ref bridging, canvas-accessibility tradeoff. Its action-game ergonomics don't map to turn-based menu combat.",
+        "fitForProject": "Poor fit. Optimized for quick action/arcade prototypes, not a UI/text-heavy turn-based LMS game; alpha status adds avoidable risk."
+      },
+      {
+        "name": "Excalibur.js",
+        "whatItIs": "A friendly, TypeScript-first 2D HTML5 canvas game engine (actors, scenes, input, tweens, basic physics) aimed at approachability. Latest npm 0.32.0; still pre-1.0 (0.x) in mid-2026 with a published 1.0 roadmap. MIT.",
+        "pros": "Excellent TypeScript ergonomics and clean API; lower learning curve than Phaser; cohesive engine with the basics included. Active repo (commits June 2026).",
+        "cons": "Still 0.x — the maintainers explicitly warn breaking changes will occur between releases; risky to anchor a showcase on. Tree-shaking is admittedly immature ('likely you'll end up importing everything'), so bundle isn't as lean as hoped. Same canvas/SSR/accessibility tradeoffs as other engines. Smaller community than Phaser/Pixi.",
+        "fitForProject": "Weak fit. Nicer DX than Phaser/KAPLAY but it's still a full canvas engine solving problems this turn-based UI game doesn't have, plus pre-1.0 instability."
+      },
+      {
+        "name": "Optional supplements: tsParticles / canvas-confetti / Lottie (not engines)",
+        "whatItIs": "Drop-in effect libraries usable from React with no game loop: canvas-confetti (~tiny) for victory bursts, tsParticles for configurable particle backgrounds/bosses, and Lottie (lottie-react) to play designer/After-Effects (or AI-generated) JSON animations for boss attacks/relic reveals.",
+        "pros": "Add 'game juice' cheaply without adopting an engine; lazy-loadable so they don't bloat initial bundle; integrate as isolated client components. Lottie gives high-quality animation assets without sprite pipelines.",
+        "cons": "Each is single-purpose; not a substitute for combat logic. Lottie runtime adds weight if overused; tsParticles configs can be heavy if not tuned. Still client-only.",
+        "fitForProject": "Strong, low-risk add-ons to the recommended React+Motion approach for spectacle, deferred until after core combat works."
+      }
+    ],
+    "recommendation": "Build the combat client as plain React + Tailwind + Motion (formerly Framer Motion), with a deterministic combat engine modeled as an XState state machine and domain state in Zustand. Do NOT adopt a canvas game engine (Phaser/PixiJS/KAPLAY/Excalibur) for the primary client. The combat is turn-based and question-driven — sequencing animated UI reactions to discrete events — which is precisely what React + a state machine model cleanly, and precisely what a 60fps canvas render loop is wasteful for. This also keeps the client SSR-friendly, small (deploys comfortably on Vercel/Netlify free tiers), accessible (real HTML for a school LMS), and trivially testable (a huge plus for the evals/guardrails portion of your AI story).\\n\\nHOW TO WIRE IT INTO NEXT.JS (App Router): The combat UI is plain React, so it needs NO ssr:false hack — render it directly in a 'use client' page/component. Reserve dynamic-import-with-ssr:false ONLY for any genuinely browser-only layer (e.g. an optional PixiJS/tsParticles effects canvas). In Next.js 15, `dynamic(..., { ssr:false })` is forbidden inside Server Components, so use the standard wrapper: create `BossFxCanvas.tsx` (the browser-only renderer), then a thin `'use client'` wrapper `const BossFxCanvas = dynamic(() => import('./BossFxCanvas'), { ssr:false })` exported as `BossFxCanvasNoSSR`, and import THAT from your page; give it a Suspense/loading fallback to avoid layout shift. Use Motion's `LazyMotion` + `m` components (and/or `useAnimate` mini) to keep the animation bundle near ~4.6kb initial instead of the full ~34kb `motion` component.\\n\\nHOW STATE/COMBAT IS MODELED: (1) Domain layer — a pure, framework-agnostic TypeScript module: types for Boss, Question, PlayerStats (HP, XP, level), Relics, and pure reducers like `applyAnswer(state, answer): {damage, hpDelta, streak, multiplier, events[]}`. Keep it pure so it's unit-testable and reusable server-side if you ever score on the FastAPI backend. (2) Orchestration layer — an XState machine for the explicit combat flow: states like `presentingQuestion -> awaitingAnswer -> resolving (guarded: correct/incorrect) -> applyingDamage -> (bossDefeated | playerDown | nextQuestion) -> rewardScreen`. XState's guards/actions/parallel states map directly to streak multipliers, relic triggers, and 'boss enrage' sub-phases, and the machine is inspectable/visualizable — a clean portfolio artifact. (3) Store/UI binding — Zustand (~3KB) holds the live snapshot the React tree subscribes to (with selectors to avoid over-render); the XState machine's context is the source of truth and pushes snapshots into Zustand (or use `@xstate/store` if you prefer a lighter middle-ground and want a graduation path to full machines). React components render from the store; each XState transition emits `events[]` that the UI turns into Motion animations via `AnimatePresence` (damage numbers, HP bar tween, streak flash, level-up toast). PRAGMATIC START: if you want less ceremony on day one, begin with a single Zustand store + a typed `dispatch(action)` reducer for combat, and refactor the flow into XState once phases/relics make the implicit state machine painful — `@xstate/store` makes that upgrade path smooth. ESCALATION PATH FOR VFX: keep Motion/CSS for 90% of feedback; add `canvas-confetti` for victories and a lazily-loaded PixiJS or tsParticles 'boss arena' canvas ONLY if you later want particle-grade spectacle — layered behind the React HUD, never owning the UI.",
+    "keyFacts": [
+      "Phaser 4.0.0 'Caladan' released 10 April 2026; latest v4.2.0 (late June 2026); MIT; full game framework on a new WebGL renderer (WebGPU is a future architectural goal, not yet the shipped renderer). Full build ~400-500KB gzipped; modular minimum ~80KB.",
+      "PixiJS v8 is a rendering library (not a game framework); latest ~v8.18-8.19 (June 2026); MIT; v8 reverted to a single tree-shakeable `pixi.js` package; crossed 500k weekly npm downloads; ~150KB gzipped core class, less with selective imports.",
+      "KAPLAY is the actively-maintained MIT-licensed successor/fork of the abandoned Kaboom.js (Replit dropped Kaboom in 2024); latest 4000.0.0-alpha.27.1 (12 May 2026) — still an ALPHA line; ~1.7k GitHub stars; has a 2026 roadmap.",
+      "Excalibur.js is a TypeScript-first 2D canvas engine; latest npm 0.32.0; still pre-1.0 (0.x) in mid-2026 with maintainers warning breaking changes will occur; MIT; tree-shaking is immature ('likely you'll end up importing everything').",
+      "Framer Motion was renamed 'Motion' (independent project, 2025); install `motion`, import from `motion/react`; MIT; v12. The `motion` component can't tree-shake below ~34kb, but `LazyMotion`+`m` brings initial render to ~4.6kb; `useAnimate` mini is 2.3kb (smallest React animation lib).",
+      "In Next.js 15 App Router, `dynamic(..., { ssr:false })` is NOT allowed inside Server Components; the established pattern is a thin `'use client'` wrapper that does the dynamic import, then importing that wrapper into the server tree. Add a Suspense/loading fallback to avoid layout shift for canvas components.",
+      "Zustand adds ~3KB; State of React 2025 survey (pub. Feb 2026) shows Zustand usage crossing ~50%. XState provides declarative statecharts (guards, actions, parallel/hierarchical states); `@xstate/store` is a lighter event-based store with a graduation path to full machines.",
+      "All five candidate game libraries (Phaser, PixiJS, KAPLAY, Excalibur) and Motion are MIT-licensed and actively maintained in 2026 — selection is about fit, not license or abandonment risk.",
+      "Canvas-rendered UI (any engine) is browser-only and must be client-mounted, and is harder to make keyboard-/screen-reader-accessible than HTML — a real consideration for a school-facing LMS."
+    ],
+    "citations": [
+      {
+        "title": "Phaser releases (GitHub) — v4.x release history",
+        "url": "https://github.com/phaserjs/phaser/releases"
+      },
+      {
+        "title": "Download Phaser v4.0.0 (official) — release date",
+        "url": "https://phaser.io/download/release/v4.0.0"
+      },
+      {
+        "title": "phaser — npm (current version)",
+        "url": "https://www.npmjs.com/package/phaser"
+      },
+      {
+        "title": "Phaser vs PixiJS (2026): Game Framework vs Renderer — bundle sizes",
+        "url": "https://generalistprogrammer.com/comparisons/phaser-vs-pixijs"
+      },
+      {
+        "title": "PixiJS v8 Launches (official blog) — single-package, tree-shaking",
+        "url": "https://pixijs.com/blog/pixi-v8-launches"
+      },
+      {
+        "title": "PixiJS June 2026 update (official blog) — v8.18/8.19, 500k weekly downloads",
+        "url": "https://pixijs.com/blog/june-2026"
+      },
+      {
+        "title": "pixi.js — npm (license/version)",
+        "url": "https://www.npmjs.com/package/pixi.js"
+      },
+      {
+        "title": "KAPLAY.js — GitHub (license, version, status)",
+        "url": "https://github.com/kaplayjs/kaplay"
+      },
+      {
+        "title": "KAPLAY Roadmap 2026 (wiki)",
+        "url": "https://github.com/kaplayjs/kaplay/wiki/KAPLAY-Roadmap-2026"
+      },
+      {
+        "title": "Kaboom.js (official) — no longer maintained notice",
+        "url": "https://kaboomjs.com/"
+      },
+      {
+        "title": "Excalibur — GitHub (TypeScript 2D engine)",
+        "url": "https://github.com/excaliburjs/Excalibur"
+      },
+      {
+        "title": "excalibur — npm (version 0.32.0, pre-1.0)",
+        "url": "https://www.npmjs.com/package/excalibur"
+      },
+      {
+        "title": "Excalibur build & bundlers docs — tree-shaking caveat",
+        "url": "https://excaliburjs.com/docs/bundlers/"
+      },
+      {
+        "title": "Motion (formerly Framer Motion) — official site",
+        "url": "https://motion.dev/"
+      },
+      {
+        "title": "Reduce bundle size of Framer Motion — LazyMotion/m, useAnimate mini sizes",
+        "url": "https://motion.dev/docs/react-reduce-bundle-size"
+      },
+      {
+        "title": "framer-motion / motion — npm (rename, MIT)",
+        "url": "https://www.npmjs.com/package/framer-motion"
+      },
+      {
+        "title": "Next.js Lazy Loading guide (next/dynamic, ssr:false)",
+        "url": "https://nextjs.org/docs/pages/guides/lazy-loading"
+      },
+      {
+        "title": "Avoiding SSR Pitfalls: next/dynamic in Next.js — client wrapper pattern",
+        "url": "https://dev.to/snaka/avoiding-ssr-pitfalls-using-nextdynamic-in-your-nextjs-app-a4o"
+      },
+      {
+        "title": "XState — GitHub (statecharts, guards, parallel states)",
+        "url": "https://github.com/statelyai/xstate"
+      },
+      {
+        "title": "Introducing XState Store (TkDodo) — @xstate/store, graduation path",
+        "url": "https://tkdodo.eu/blog/introducing-x-state-store"
+      },
+      {
+        "title": "React State Management in 2026: data-driven comparison (Zustand usage)",
+        "url": "https://saschb2b.com/blog/react-state-management-2026"
+      },
+      {
+        "title": "JS game rendering benchmark (Phaser/Pixi/KAPLAY/Excalibur/etc.)",
+        "url": "https://github.com/Shirajuki/js-game-rendering-benchmark"
+      }
+    ],
+    "risks": [
+      "Animation orchestration debt: a no-engine approach means you sequence turn animations manually. Mitigation: drive all UI animation from XState transition events and Motion AnimatePresence; keep combat logic pure and separate from animation so timing bugs don't corrupt game state.",
+      "Bundle creep from Motion: the default `motion` component is ~34kb and can't tree-shake smaller. Mitigation: standardize on `LazyMotion` + `m` (or `useAnimate` mini, 2.3kb) and lazy-load heavier features.",
+      "Over-engineering state: XState has a statechart learning curve and can be verbose. Mitigation: start with a typed Zustand reducer or `@xstate/store`, and graduate to a full XState machine only when phases/relics/streak rules make the implicit machine unmanageable.",
+      "If product scope shifts to real-time/action combat later, plain React stops being ideal. Mitigation: the pure domain layer is engine-agnostic, so you could mount PixiJS as a render layer without rewriting game logic — but re-evaluate Phaser/Pixi if the genre truly changes.",
+      "VFX ceiling: CSS/Motion can't do particle-grade spectacle. Mitigation: lazily add canvas-confetti / tsParticles / a small PixiJS effects canvas behind the HUD, isolated via the ssr:false client-wrapper pattern, only after core combat ships.",
+      "KAPLAY (alpha 4000.x) and Excalibur (pre-1.0 0.x) carry API-churn risk in 2026; avoid anchoring a portfolio piece to either. Phaser 4 and PixiJS v8 are stable if a canvas engine is ever genuinely needed.",
+      "Accessibility/SEO for an LMS: canvas UI is hard to make keyboard- and screen-reader-accessible. The recommended HTML-based UI avoids this; if any canvas layer is added, keep all interactive/answer controls in the DOM, never on canvas."
+    ]
+  },
+  {
+    "dimension": "OpenAI structured generation pipeline",
+    "summary": "For SyllabusSlayer, the right approach in 2026 is OpenAI Structured Outputs (response_format: {type: \"json_schema\", strict: true}) for every generation step — it uses constrained decoding (a compiled grammar that masks invalid tokens) so the model literally cannot emit non-conforming JSON, eliminating most parse/repair loops. Use it over legacy JSON mode (no schema guarantee) and over tool/function calling (which is for invoking app functions, not for returning a payload to the user). The model lineup has moved past the original GPT-5 family: as of June 2026 the current models are GPT-5.5 (flagship, $5/$30 per 1M in/out, 1.05M context), GPT-5.4 ($2.50/$15, 1.05M context), GPT-5.4-mini ($0.75/$4.50), and GPT-5.4-nano ($0.20/$1.25). My recommendation: generate the heavy game content per-chapter with GPT-5.4 (the price/quality workhorse), use GPT-5.4-mini or nano for cheap helper steps (chunk summarization, Bloom tagging, dedup, difficulty calibration), and run the whole batch through the asynchronous Batch API for a flat 50% discount since game generation is not latency-sensitive. A 30-page document costs roughly a few US cents end-to-end. The biggest engineering wins to showcase are: per-chapter chunking (respect the 100-property/5-level schema limits), strict-schema validation plus a small Pydantic post-validation layer for content rules the schema can't enforce (exactly one correct answer, answer grounded in source), and a grounded, Bloom-aware question-generation prompt.",
+    "options": [
+      {
+        "name": "Structured Outputs (json_schema + strict:true) — RECOMMENDED for all generation",
+        "whatItIs": "Pass response_format: {type: 'json_schema', json_schema: {name, schema, strict: true}}. OpenAI compiles your JSON Schema into a context-free grammar and masks invalid tokens during decoding, so output is guaranteed to match the schema (correct types, required keys present, enums valid). Supported on GPT-4o and all GPT-5.x models; for new projects OpenAI says start with the current flagship.",
+        "pros": "Hard guarantee of schema-valid JSON — no hallucinated keys, no invalid enums, no missing fields, near-zero JSON parse failures. Dramatically simplifies the FastAPI pipeline: you can deserialize straight into Pydantic models. Schema errors return a 400 at submit time (before tokens generated), so bugs surface fast. Works inside the Batch API. With OpenAI SDK you can pass a Pydantic model directly (response_format=YourModel) and it generates the schema for you.",
+        "cons": "Only guarantees STRUCTURE, not CONTENT — keywords like minLength, maximum, pattern, format, and default are NOT enforced and (for default) will be rejected. Strict rules: top-level must be an object (wrap arrays as {items:[...]}), every property must be listed in 'required', additionalProperties:false on every object, optionals must be expressed as a null union (e.g. type:['string','null'] or anyOf with {type:'null'}). Hard limits: up to 100 object properties total and up to 5 levels of nesting. First request with a new schema has extra latency while the grammar is compiled (then cached).",
+        "fitForProject": "Ideal and should be the default for every LLM call in SyllabusSlayer (boss/quiz/relic/map generation, question generation, helper steps). The 100-prop/5-level cap is exactly why you should generate per-chapter rather than the whole game in one schema."
+      },
+      {
+        "name": "Function / tool calling",
+        "whatItIs": "Define a tool with a JSON-schema parameter list; the model returns a tool_call with arguments matching the schema. Can also be made strict. Designed to bridge the model to application functions/APIs rather than to return a final structured answer to the user.",
+        "pros": "Same schema-adherence guarantees as Structured Outputs when strict is enabled. Natural when the model must CHOOSE among several actions, or when you genuinely want to call code. Can return multiple tool calls.",
+        "cons": "Semantically the wrong tool for 'give me a structured payload' — adds a tool-call wrapper, and OpenAI explicitly recommends response_format/Structured Outputs when you just want the model's structured response to the user. Slightly more plumbing (parsing tool_calls, handling no-call cases).",
+        "fitForProject": "Not needed for content generation. Reserve for a possible future agentic teacher-assistant feature ('regenerate this boss', 'make question 3 harder') where the model picks an action. For the generation pipeline, use Structured Outputs."
+      },
+      {
+        "name": "JSON mode (type: 'json_object') — legacy, avoid",
+        "whatItIs": "Older feature that only guarantees the output is syntactically valid JSON. Does not enforce your schema at all; you must describe the shape in the prompt and validate yourself.",
+        "pros": "Works on older models that predate Structured Outputs. Slightly simpler to invoke.",
+        "cons": "No schema adherence — the model can omit fields, invent keys, or use wrong types/enums. Forces you to build validation + repair loops. Considered legacy in 2026.",
+        "fitForProject": "Do not use. There is no reason to choose it for a 2026 greenfield project where you control the models — it would only add a repair-loop you don't need."
+      },
+      {
+        "name": "Model choice: GPT-5.4 for heavy generation, GPT-5.4-mini/nano for helpers — RECOMMENDED",
+        "whatItIs": "Tiered model strategy. Heavy step (turning a chapter into bosses + a coherent set of pedagogically sound quiz questions + relic/reward metadata) on GPT-5.4 ($2.50/$15 per 1M, 1.05M ctx, 128K max output, supports Structured Outputs + reasoning effort). Cheap helper steps on GPT-5.4-mini ($0.75/$4.50) or GPT-5.4-nano ($0.20/$1.25): chunk/section summarization, Bloom-level tagging, distractor sanity checks, difficulty scoring, deduplication.",
+        "pros": "GPT-5.4 hits the price/quality sweet spot; you avoid paying GPT-5.5 flagship rates ($5/$30) for content that GPT-5.4 generates well. Routing trivial steps to nano (12.5x cheaper input than GPT-5.5) keeps total cost in the cents range. All tiers support Structured Outputs, so the same schema/validation code works across the pipeline. Reasoning effort can be set to 'low' or 'none' on mechanical steps to save hidden reasoning tokens.",
+        "cons": "Hidden reasoning tokens are billed as output but not returned — keep reasoning effort low/none on simple steps or output cost balloons. Mini/nano can produce weaker distractors and occasionally ambiguous keys, so quality-critical question authoring should stay on GPT-5.4 (or escalate hard chapters to GPT-5.5). Model names/prices are volatile — pin a model version string in config and re-verify before launch.",
+        "fitForProject": "Directly tailored to the portfolio budget. Showcases cost-aware AI engineering (model routing + reasoning-effort control), a strong resume signal."
+      },
+      {
+        "name": "Whole-game-in-one-call vs per-chapter generation — RECOMMEND per-chapter",
+        "whatItIs": "Either ask the model to emit the entire game in a single response, or split by syllabus chapter/section: one generation call per chapter producing that chapter's boss + question set, then assemble the campaign map in app code (or a final cheap call).",
+        "pros": "Per-chapter keeps each schema small (well under the 100-property/5-level limits), keeps each output well under the 128K max-output cap, lets you parallelize and batch, isolates failures (retry one chapter, not the whole game), and lets you route hard chapters to a stronger model. Maps cleanly onto the campaign structure your spec already describes.",
+        "cons": "Slightly more orchestration code; need a final step (cheap LLM call or deterministic code) to stitch chapters into a coherent campaign map and balance HP/XP/damage curves across the game. Cross-chapter consistency (no duplicate questions, escalating difficulty) must be enforced by your code, not a single prompt.",
+        "fitForProject": "Strongly preferred. A 30-page syllabus naturally splits into chapters/sections; per-chapter calls fit the schema limits, the Batch API, and the roguelike map-mirrors-syllabus design."
+      },
+      {
+        "name": "Batch API for the generation run — RECOMMENDED",
+        "whatItIs": "Submit all per-chapter generation requests as a JSONL file (one line per request with a custom_id and a body identical to a /v1/chat/completions or /v1/responses call, including response_format). OpenAI processes within 24h (often 1-6h) and returns a JSONL of results at 50% off input AND output. response_format/Structured Outputs work inside batches.",
+        "pros": "Flat 50% discount on a workload that is inherently NOT real-time (teacher uploads, game is ready 'soon'). Separate, much higher rate-limit pool. Per-request error file keyed by custom_id makes retries clean. Stacks with prompt caching (cached prefixes get an additional discount). One file per model fits the tiered strategy (one batch for GPT-5.4 heavy steps, one for nano helpers).",
+        "cons": "Asynchronous — not suitable if you want instant game generation in the demo UX; mitigate by showing a 'your game is being built' state, or use synchronous calls for live demos and Batch for bulk/seed content. Single model per input file. 50,000 requests / 200MB per job cap (irrelevant at portfolio scale).",
+        "fitForProject": "Great fit and a strong portfolio talking point. Use Batch for the heavy generation run; optionally keep a synchronous path for live demos. Be explicit in the README about the cost trade-off."
+      }
+    ],
+    "recommendation": "Build the pipeline as: (1) Ingest -> chunk the document by chapter/section. (2) For each chunk, a cheap GPT-5.4-nano call extracts a structured outline (topics, key facts, candidate Bloom levels) using Structured Outputs. (3) For each chapter, a GPT-5.4 call generates the boss + a grounded, Bloom-varied question set + relic/reward metadata, again with Structured Outputs (strict:true). (4) A deterministic Python/Pydantic layer assembles the campaign map and validates content rules the schema cannot enforce. (5) Run steps 2-3 through the Batch API for a 50% discount; keep a synchronous path for live demos.\n\nCONCRETE FastAPI setup: define Pydantic models for GameChapter, Boss, QuizQuestion (stem, four options, correct_index/enum, bloom_level enum, source_quote, explanation), Relic, etc. Pass them via the OpenAI Python SDK's structured-output parse helper (it auto-generates the JSON Schema and sets strict:true). Honor the constraints: top-level object, NO defaults, every field in 'required', optionals as null unions (Optional[X] -> the SDK emits a null union), additionalProperties:false implied. Keep each per-chapter schema under 100 properties and 5 nesting levels — if a chapter's question set is large, generate questions in a separate sub-call rather than deeply nesting. Set reasoning effort to 'low'/'none' on nano helper steps; allow 'medium' on the GPT-5.4 authoring step. Pin exact model strings ('gpt-5.4', 'gpt-5.4-mini', 'gpt-5.4-nano', 'gpt-5.5') in config and re-verify pricing before launch.\n\nVALIDATION/REPAIR LOOP: Structured Outputs removes JSON-shape failures, so you only need a thin content-validation layer in Pydantic/code: (a) exactly one correct answer and correct_index in range; (b) no duplicate or near-duplicate options; (c) source_quote actually appears in (or is entailed by) the chunk — do a substring/fuzzy check to enforce grounding; (d) Bloom level distribution across the chapter (e.g. require a spread, not all 'remember'); (e) stem not trivially answerable without the source. On a content-rule failure, do a bounded regeneration (max ~2 retries) by re-calling with the failing item and a 'fix only these problems' instruction — not a free-form repair, since the schema is already guaranteed. Log failures for your evals section.\n\nPEDAGOGICAL PROMPT PATTERN (the part that impresses reviewers): a system prompt that (1) injects the source chunk and instructs the model to ground BOTH the key and the distractors in that text to prevent hallucination; (2) names the target Bloom level and includes its definition, asking for a spread of levels across the set (remember/understand/apply/analyze); (3) encodes item-writing rules explicitly — clear unambiguous stem, exactly one defensibly correct answer, three plausible-but-wrong homogeneous distractors, no cueing, no 'all/none of the above'; (4) returns a per-item source_quote and a short explanation justifying the key, which doubles as evidence for your grounding check and as in-game feedback; (5) uses 1-2 few-shot examples of well-formed items. Plan for an optional LLM-judge eval (a GPT-5.4 'critic' pass scoring clarity/grounding/single-answer) as a portfolio guardrails showcase, and document that human review remains the backstop since ambiguous keys/weak distractors are the known LLM failure mode.\n\nCOST/TOKEN BUDGET (order-of-magnitude, ~30-page doc ~= 15-20K tokens of text): input across the whole pipeline is small. Even generously assuming ~50K input tokens (source re-sent per chapter + prompts) and ~60K output tokens (full game JSON) on GPT-5.4 at $2.50/$15 per 1M, that's about $0.125 input + $0.90 output ~= ~$1 synchronous, or ~$0.50 via Batch. Routing the outline/helper steps to nano makes their cost negligible. Realistically a single demo game lands in the low tens of cents. This is cheap enough that you can afford a critic/eval pass and still stay in budget — emphasize this cost discipline in the portfolio writeup.",
+    "keyFacts": [
+      "Structured Outputs is invoked via response_format: {type: 'json_schema', json_schema: {name, schema, strict: true}} and uses constrained decoding (compiled context-free grammar) so output is guaranteed schema-valid — not prompt-based enforcement.",
+      "Structured Outputs hard limits: up to 100 object properties total and up to 5 levels of nesting per schema.",
+      "Strict-mode rules: top-level must be an object (no raw array); EVERY property must be listed in 'required'; additionalProperties:false is required on every object; optionals must be a null union (type:['string','null'] or anyOf with {type:'null'}); 'default' values are rejected.",
+      "Unsupported/unenforced JSON Schema keywords: pattern, format, minLength, maxLength, minimum, maximum, minItems, maxItems, default — Structured Outputs constrains STRUCTURE not CONTENT; enforce these in application code.",
+      "Supported keywords include anyOf (for null unions), enum (constrained — model cannot emit an invalid enum value), and $defs/$ref for reusable subschemas; recursive schemas are supported via the CFG approach.",
+      "Structured Outputs is supported on GPT-4o and all GPT-5.x models; JSON mode (type:'json_object') is legacy and only guarantees syntactic JSON, not schema adherence.",
+      "The original GPT-5 / GPT-5-mini / GPT-5-nano family is no longer on OpenAI's official pricing page as of June 2026; current lineup is GPT-5.5, GPT-5.4, GPT-5.4-mini, GPT-5.4-nano.",
+      "GPT-5.5 (flagship): $5.00 input / $0.50 cached / $30.00 output per 1M tokens; 1,050,000-token context window; 128,000 max output tokens; knowledge cutoff Dec 1, 2025; supports Structured Outputs and reasoning effort none/low/medium(default)/high/xhigh.",
+      "GPT-5.4: $2.50 input / $0.25 cached / $15.00 output per 1M; 1,050,000 context; 128,000 max output; knowledge cutoff Aug 31, 2025; supports Structured Outputs and reasoning effort.",
+      "GPT-5.4-mini: $0.75 input / $0.075 cached / $4.50 output per 1M. GPT-5.4-nano: $0.20 input / $0.02 cached / $1.25 output per 1M.",
+      "Batch API: asynchronous JSONL submit, results within 24h (often 1-6h), flat 50% discount on input AND output; one model per input file; up to 50,000 requests or 200MB per job; supports response_format/Structured Outputs; error file keyed by custom_id; stacks with prompt caching.",
+      "Prompt caching gives ~90% off repeated input prefixes (e.g. GPT-5.5 input $5.00 -> $0.50 cached) and stacks with the Batch discount.",
+      "Reasoning models bill hidden 'thinking' tokens as output even though they are not returned; set reasoning effort low/none on mechanical steps to control cost.",
+      "GPT-5.5 long-context surcharge: prompts over 272K input tokens are billed at 2x input / 1.5x output for the whole session (also applies to GPT-5.4 1.05M-context tier) — irrelevant for a 30-page doc but good to know.",
+      "Research finding: LLM-generated MCQs' main failure modes are ambiguous keys and implausible/superficial distractors; grounding the prompt in injected source text, encoding item-writing rules, specifying Bloom level + definition, and retrieval/few-shot examples materially improve quality, but human review remains necessary."
+    ],
+    "citations": [
+      {
+        "title": "Structured model outputs | OpenAI API docs",
+        "url": "https://developers.openai.com/api/docs/guides/structured-outputs"
+      },
+      {
+        "title": "Introducing Structured Outputs in the API | OpenAI",
+        "url": "https://openai.com/index/introducing-structured-outputs-in-the-api/"
+      },
+      {
+        "title": "Pricing | OpenAI API docs",
+        "url": "https://developers.openai.com/api/docs/pricing"
+      },
+      {
+        "title": "GPT-5.5 Model | OpenAI API docs",
+        "url": "https://developers.openai.com/api/docs/models/gpt-5.5"
+      },
+      {
+        "title": "GPT-5.4 Model | OpenAI API docs",
+        "url": "https://developers.openai.com/api/docs/models/gpt-5.4"
+      },
+      {
+        "title": "Batch API | OpenAI API docs",
+        "url": "https://developers.openai.com/api/docs/guides/batch"
+      },
+      {
+        "title": "OpenAI Structured Outputs vs JSON Mode (2026 Guide) | Respan",
+        "url": "https://www.respan.ai/articles/openai-structured-outputs-vs-json-mode"
+      },
+      {
+        "title": "OpenAI structured outputs JSON schema: a practical guide | Codewords",
+        "url": "https://www.codewords.ai/blog/openai-structured-outputs-json-schema"
+      },
+      {
+        "title": "OpenAI API Pricing (2026): GPT-5.5, GPT-5.4 full per-token table | Morph",
+        "url": "https://www.morphllm.com/openai-api-pricing"
+      },
+      {
+        "title": "GPT 5 Mini API Pricing 2026 | pricepertoken",
+        "url": "https://pricepertoken.com/pricing-page/model/openai-gpt-5-mini"
+      },
+      {
+        "title": "How Teachers Can Use LLMs and Bloom's Taxonomy to Create Educational Quizzes (arXiv)",
+        "url": "https://arxiv.org/html/2401.05914v1"
+      },
+      {
+        "title": "Multiple-Choice Question Generation Using Large Language Models: Methodology and Educator Insights (arXiv)",
+        "url": "https://arxiv.org/html/2506.04851v1"
+      },
+      {
+        "title": "Docimological Quality Analysis of LLM-Generated Multiple Choice Questions | SN Computer Science",
+        "url": "https://link.springer.com/article/10.1007/s42979-024-02963-6"
+      },
+      {
+        "title": "Distractor generation for MCQs with predictive prompting and LLMs (arXiv)",
+        "url": "https://arxiv.org/abs/2307.16338"
+      }
+    ],
+    "risks": [
+      "Model names and pricing are volatile in 2026 — the original GPT-5 family was already retired and replaced by GPT-5.4/5.5 within months. Pin exact model strings in config, abstract the model name behind an env var, and re-verify pricing on developers.openai.com/api/docs/pricing immediately before launch and periodically after.",
+      "Structured Outputs guarantees JSON shape but NOT content correctness. A schema-valid quiz can still have an ambiguous stem, a wrong 'correct' answer, or hallucinated facts not in the source. You MUST add a content-validation layer (single-answer check, grounding/source-quote check, Bloom distribution) — do not assume strict mode means pedagogically valid.",
+      "Schema-limit violations (over 100 properties or 5 nesting levels, a stray 'default', a missing 'required' entry) cause a hard 400 at request time. Generating the whole game in one schema risks hitting these limits; per-chapter generation with question sub-calls avoids it.",
+      "Hidden reasoning tokens are billed as output and can multiply cost several-fold on a verbose generation step. Leaving reasoning effort high on every call could turn a cents-level job into dollars. Set effort low/none on mechanical steps and monitor usage.",
+      "Batch API is asynchronous (up to 24h). If your demo expects instant game generation, a pure-Batch design will feel broken — keep a synchronous path for live demos, or design the UX around an async 'building your game' state.",
+      "Distractor/key quality from cheaper models (mini/nano) is materially worse per the research; routing question authoring to nano to save money will produce ambiguous or trivial items. Keep pedagogical authoring on GPT-5.4 (or escalate to GPT-5.5 for hard chapters) and reserve nano for mechanical steps.",
+      "Grounding checks via naive substring match can produce false negatives when the model paraphrases. Use fuzzy/semantic matching for the source_quote check, or instruct the model to quote verbatim, to avoid wrongly rejecting good items.",
+      "If teacher-uploaded documents contain copyrighted/sensitive material, sending full text to OpenAI has data-handling implications; note OpenAI's data-usage/retention terms in the portfolio writeup and consider a redaction/consent step.",
+      "Some cited figures (context windows for mini/nano, a few pricing rows) came from third-party aggregators or were not fully surfaced on the official page during research; treat mini/nano context-window numbers as unconfirmed and verify on the official model pages before relying on them."
+    ]
+  },
+  {
+    "dimension": "Document ingestion and RAG decision",
+    "summary": "For SyllabusSlayer, a single uploaded course/chapter set is almost always small enough to fit in a modern OpenAI context window, so the headline decision is: parse-and-normalize-to-Markdown first, feed cleaned text directly into structured generation, and treat RAG as an OPTIONAL second-phase showcase rather than a launch requirement. The hard part of this pipeline is robust parsing across PDF/DOCX/PPTX/scanned images, not retrieval. For parsing I recommend Docling (IBM, MIT license, active, single library covering PDF+DOCX+PPTX+images+OCR, outputs Markdown/JSON) as the primary parser, with MarkItDown (Microsoft, MIT, lightweight) as a fast fallback. Avoid making PyMuPDF/pymupdf4llm your default because it is AGPL-or-commercial — fine for an open-source portfolio repo but a licensing footgun if you ever monetize. When you DO add RAG (to demonstrate the competence), use OpenAI text-embedding-3-small ($0.02/1M tokens) and pgvector on Supabase/Neon so your vectors live next to your relational game/LMS data — no extra service to run. The recommended pipeline is: upload -> Docling parse -> normalize to Markdown + section tree -> (store raw + cleaned) -> if document is large OR you want the RAG showcase, chunk by syllabus section + embed into pgvector -> structured generation (JSON-schema quiz/boss objects) with the relevant section text in context.",
+    "options": [
+      {
+        "name": "Docling (IBM) — primary parser",
+        "whatItIs": "MIT-licensed open-source document conversion toolkit from IBM Research. One library parses PDF, DOCX, PPTX, XLSX, HTML, EPUB, and images, with advanced PDF layout/reading-order/table understanding and built-in OCR for scanned pages. Outputs a unified DoclingDocument plus Markdown/HTML/JSON. Latest stable around docling 2.77.x (early 2026); requires Python 3.10+. Runs locally, CPU-only (no GPU required).",
+        "pros": "Single dependency covers every format SyllabusSlayer accepts (PDF, slides, DOCX, scanned images), so no per-format glue code. MIT license = zero legal risk for a portfolio that might become commercial. Markdown/JSON output is exactly what structured generation wants. Strong table + reading-order handling (matters for syllabi/tables of contents). First-class LangChain/LlamaIndex integrations and a docling-serve FastAPI wrapper if you want it. Actively maintained (LF AI & Data, frequent releases).",
+        "cons": "Heavier install and slower than pure-text extractors; its layout/table/OCR ML models are CPU-bound and can be slow on the Ryzen 5500U for large or image-heavy PDFs (seconds-to-minutes per doc). Bigger Docker image, which matters for free-tier deploy size. Overkill for a clean digital PDF that pdfplumber/MarkItDown could read instantly.",
+        "fitForProject": "Best primary parser. Run it as a background job (FastAPI BackgroundTasks / a worker) on upload so the slowness never blocks the request. Use OCR mode only when a page has no extractable text."
+      },
+      {
+        "name": "MarkItDown (Microsoft) — lightweight fallback / fast path",
+        "whatItIs": "MIT-licensed Python utility from Microsoft's AutoGen team that converts 15+ formats (PDF, DOCX, PPTX, XLSX, HTML, images, audio) to LLM-optimized Markdown. v0.1.6 (May 2026), very actively maintained, modular extras (pip install 'markitdown[pdf,docx,pptx]'). Can call an OpenAI client to describe images, and has an OCR plugin.",
+        "pros": "Tiny, fast, trivial API; great for clean digital documents. MIT license. Can offload image/slide description to GPT (you already use OpenAI). No GPU. Huge adoption = easy to talk about in a portfolio writeup.",
+        "cons": "Output is LLM-facing, not high-fidelity; complex multi-column PDFs and merged-cell tables degrade (~82% vs 88-92% for specialized tools). Table extraction is XML-based, not ML. OCR requires LLM calls (adds cost/latency).",
+        "fitForProject": "Use as the fast path for born-digital files, or as a fallback if Docling is too slow for a given doc. Reasonable to ship MarkItDown-only for the MVP and add Docling for the hard cases."
+      },
+      {
+        "name": "PyMuPDF / pymupdf4llm",
+        "whatItIs": "Fastest PDF text/Markdown extractor (MuPDF C engine via Artifex). pymupdf4llm emits LLM-ready Markdown with selective OCR. Latest PyMuPDF ~1.27.x, Python 3.10-3.14 wheels.",
+        "pros": "By far the fastest for native PDFs; excellent edge-case handling; pymupdf4llm gives clean Markdown with little effort and now does targeted OCR.",
+        "cons": "LICENSING TRAP: PyMuPDF and pymupdf4llm are AGPL-3.0-or-commercial (Artifex). AGPL's network-use clause is triggered by a SaaS API, forcing source disclosure unless you buy a commercial license (reportedly $10k+/yr). PDF-only. Not a clean fit for a project you might one day monetize.",
+        "fitForProject": "Avoid as a default. Acceptable ONLY while the repo is genuinely open-source AGPL-compatible; document the risk. Not worth the legal asterisk when Docling/MarkItDown (MIT) do the same job."
+      },
+      {
+        "name": "unstructured (Unstructured-IO)",
+        "whatItIs": "Apache-2.0 open-core ETL library for partitioning many document types into elements + metadata, with chunking helpers. Also a paid API (free tier ~15k pages, then ~$0.03/page).",
+        "pros": "Apache-2.0; rich element/metadata model; built-in chunk-by-title strategies useful for RAG; popular in RAG tutorials.",
+        "cons": "Open-CORE: best parsing/enrichment (e.g. office-image extraction) is paywalled behind the API. Notoriously heavy/finicky dependency tree for full format support. More machinery than this small-document use case needs.",
+        "fitForProject": "Skip for the core pipeline. Docling covers the same partition+chunk ground with a cleaner license and lighter mental model. Mention only as a known alternative."
+      },
+      {
+        "name": "python-docx / python-pptx (format-specific)",
+        "whatItIs": "The classic libraries for reading .docx (python-docx 1.2.0) and .pptx (python-pptx 1.0.2) by walking the OOXML object model.",
+        "pros": "Precise, dependency-light control over Word/PowerPoint structure (headings, slide notes, tables).",
+        "cons": "Both are flagged INACTIVE in 2026 (no PyPI release in 12+ months); still functional, no known CVEs, but no future fixes. Each handles only one format; you'd hand-roll Markdown conversion.",
+        "fitForProject": "Not needed if you use Docling/MarkItDown (which parse these formats already). Pin versions only if you ever need low-level OOXML access for a specific feature (e.g. extracting speaker notes)."
+      },
+      {
+        "name": "OCR: Tesseract (pytesseract + pdf2image) / OCRmyPDF",
+        "whatItIs": "Apache-2.0 Tesseract 5 (LSTM) via pytesseract; pages rasterized with pdf2image (needs Poppler). OCRmyPDF wraps Tesseract to add a text layer to scanned PDFs.",
+        "pros": "Free, local, no GPU, 100+ languages. Standard answer for scanned/image-only pages.",
+        "cons": "Tesseract has no preprocessing (you handle skew/denoise); accuracy drops on poor scans; needs system binaries (Poppler/Tesseract) which complicate free-tier deploys.",
+        "fitForProject": "You likely DON'T need a separate OCR stack: Docling has integrated OCR and MarkItDown has an OCR plugin / can use GPT vision. Only reach for standalone Tesseract if you want full control or to avoid paying for vision OCR. Detect scanned pages by 'no extractable text' and OCR just those."
+      },
+      {
+        "name": "Vector store (only if/when RAG): pgvector on Supabase or Neon",
+        "whatItIs": "Postgres extension storing embeddings in the same DB as your relational data. Free tiers: Supabase (500MB DB, 2 projects, pgvector on all plans, but pauses after ~1 week idle) and Neon (0.5GB x up to 100 projects, 100 CU-hrs/mo, scale-to-zero in ~1s).",
+        "pros": "Zero extra infra: your game state, users, progress, AND embeddings in one Postgres. SQL filtering + vector search together (e.g. 'retrieve chunks WHERE game_id=X'). Free-tier friendly. Great portfolio talking point (no exotic dependency).",
+        "cons": "Supabase free projects pause on inactivity (annoying for a demo URL); Neon scale-to-zero cold start ~1s. Not ideal beyond ~tens of millions of vectors (irrelevant here). You manage the index (e.g. HNSW) yourself.",
+        "fitForProject": "RECOMMENDED vector store when you add RAG. Neon's scale-to-zero suits an intermittently-used portfolio demo; Supabase is great if you also want its auth/storage. Either is correct."
+      },
+      {
+        "name": "Vector store alternatives: Chroma, Qdrant Cloud, LanceDB",
+        "whatItIs": "Chroma (Apache-2.0, dead-simple local/embedded, default in LangChain/LlamaIndex). Qdrant Cloud (free 1GB RAM/4GB disk node, ~1M 768-dim vectors, auto-suspend after 1 wk, delete after 4 wks). LanceDB (embedded, file-based, OSS free, on-disk, multimodal).",
+        "pros": "Chroma: fastest to prototype, runs in-process. Qdrant: real dedicated vector DB, free 'forever' if active, free cloud inference. LanceDB: embedded + on-disk, no server, scales past RAM.",
+        "cons": "Chroma/LanceDB add a SECOND datastore alongside Postgres = sync complexity for no benefit at this scale. Qdrant free cluster deletes after 4 weeks idle (bad for a portfolio you revisit). All require keeping embeddings consistent with your relational data.",
+        "fitForProject": "Use Chroma or LanceDB ONLY if you want a 100% local, no-cloud-DB demo. Otherwise pgvector wins because you already need Postgres. Qdrant's 4-week deletion makes it risky for a rarely-touched portfolio."
+      }
+    ],
+    "recommendation": "Ship a parse-first, retrieval-optional pipeline. Default to feeding cleaned text directly into structured generation; add RAG as a deliberate, well-explained second phase to showcase the skill.\n\nDECISION RULE (RAG vs long-context): Compute the token count of the normalized Markdown (tiktoken). With GPT-4.1 (~1.05M-token context, $2/1M in, $8/1M out) or even GPT-4o (128K), a single syllabus, chapter, or lecture-deck set almost always fits. So:\n- If the relevant material for ONE generation call (e.g. one chapter -> one 'boss') is under ~100K tokens: SKIP retrieval. Pass that section's cleaned Markdown directly. This is cheaper to build, easier to debug, and produces better questions because the model sees full context.\n- Add RAG ONLY when at least one is true: (a) the full corpus for a single game exceeds the context you're willing to pay for per call; (b) you want cross-document grounding/citations ('this question came from slide 12 of Lecture 3'); (c) you want a 'student asks the tutor a question' chat feature that searches all course material; or (d) you explicitly want RAG on your resume. For a portfolio, (d) is legitimate — so build it, but gate it behind the size check so the system uses the cheaper path when it can.\n\nCONCRETE PIPELINE (simplest thing that still demonstrates real AI engineering):\n1. Upload (FastAPI endpoint) -> store original file in object storage / Supabase Storage.\n2. Parse in a BACKGROUND task: Docling as primary (handles PDF/DOCX/PPTX/images + OCR for scanned pages in one library, MIT-licensed). For clean born-digital files you may fast-path with MarkItDown. This keeps the slow CPU parsing off the request thread on the GPU-less Ryzen machine.\n3. Normalize: produce (a) full cleaned Markdown and (b) a section/heading tree mirroring the syllabus (Docling preserves reading order + headings + tables). This tree becomes your campaign map structure — a nice product/AI synergy.\n4. Persist: raw text + Markdown + section tree in Postgres (Neon free tier; scale-to-zero suits a portfolio demo).\n5. Generate: for each section/'boss', call OpenAI with response_format JSON schema (or function/tool calling) to emit validated quiz/boss objects (question, options, correct answer, difficulty, damage weight, explanation). Validate with Pydantic; add a guardrail pass (e.g. answerability check, no-duplicate-answers, reading-level). This structured-generation + eval/guardrail layer is the strongest AI-engineering signal.\n6. OPTIONAL RAG phase (turn on when the size rule triggers, or as a showcase): chunk by syllabus section (semantic, ~300-800 tokens, small overlap, keep section metadata) -> embed with text-embedding-3-small ($0.02/1M; use Batch API for half price) -> store in pgvector in the SAME Postgres -> at generation/tutor-chat time, retrieve top-k chunks filtered by game_id and feed them as context.\n\nWHY THESE CHOICES: Docling+MarkItDown give MIT-clean, GPU-free, multi-format parsing (avoiding PyMuPDF's AGPL trap). pgvector keeps everything in one Postgres so there's no second service to run on a free tier and no embedding/relational sync problem. text-embedding-3-small is the right default (3-large at $0.13/1M and 3072 dims is unnecessary for course material). The size-gated RAG decision is itself the portfolio talking point: 'I measured tokens and only paid for retrieval when it actually helped.'",
+    "keyFacts": [
+      "OpenAI text-embedding-3-small: $0.02 per 1M tokens, 1536 dims (Batch API ~$0.01/1M). Recommended default for this project.",
+      "OpenAI text-embedding-3-large: $0.13 per 1M tokens, 3072 dims. Overkill for course material; reserve for high-precision retrieval.",
+      "GPT-4.1 family context window: ~1,047,576 tokens (1M+); list price ~$2/1M input, $8/1M output. GPT-4.1 is OpenAI's recommended production model over GPT-4o.",
+      "GPT-4o context window: 128K tokens; $2.50/1M input, $10/1M output. GPT-4o mini: 128K, $0.15/$0.60.",
+      "A single syllabus/chapter/lecture-deck set typically fits well within these context windows, so direct long-context generation is usually feasible without RAG.",
+      "Docling (IBM Research, LF AI & Data): MIT license; parses PDF, DOCX, PPTX, XLSX, HTML, EPUB, images, audio; built-in OCR; outputs Markdown/HTML/JSON; runs locally CPU-only; ~docling 2.77.x in early 2026; requires Python 3.10+.",
+      "MarkItDown (Microsoft): MIT license; v0.1.6 (May 2026); actively maintained; converts 15+ formats to LLM Markdown; modular extras; can use OpenAI for image description; has an OCR plugin; Python 3.10+.",
+      "PyMuPDF and pymupdf4llm: AGPL-3.0-or-commercial (Artifex). AGPL network-use clause triggers source-disclosure for SaaS; commercial license reportedly $10k+/yr. Fastest for native PDFs but a licensing risk if monetized.",
+      "unstructured: Apache-2.0 but OPEN-CORE (some parsing/enrichment paywalled to its API; free API tier ~15k pages then ~$0.03/page); heavy dependency tree.",
+      "python-docx (1.2.0) and python-pptx (1.0.2): both flagged INACTIVE in 2026 (no PyPI release in 12+ months), still functional, no known CVEs.",
+      "Tesseract 5 (Apache-2.0) via pytesseract is the standard local OCR; pages rasterized with pdf2image (needs Poppler); OCRmyPDF wraps it to add a text layer. Often unnecessary because Docling has integrated OCR.",
+      "pgvector free tiers: Supabase (500MB DB, 2 projects, pgvector on all plans, pauses ~1 week idle) and Neon (0.5GB x up to 100 projects, 100 CU-hrs/mo, scale-to-zero ~1s resume). pgvector included at no extra charge.",
+      "Qdrant Cloud free tier: 1 node, 1GB RAM/4GB disk (~1M 768-dim vectors), but auto-suspends after 1 week idle and DELETES after 4 weeks idle.",
+      "Chroma (Apache-2.0) and LanceDB (OSS) are embedded/local-first; adding either alongside Postgres creates a second datastore to keep in sync."
+    ],
+    "citations": [
+      {
+        "title": "OpenAI Embedding Pricing 2026 (text-embedding-3-small/large)",
+        "url": "https://tokenmix.ai/blog/openai-embedding-pricing"
+      },
+      {
+        "title": "text-embedding-3-small Model | OpenAI API",
+        "url": "https://developers.openai.com/api/docs/models/text-embedding-3-small"
+      },
+      {
+        "title": "Pricing | OpenAI API",
+        "url": "https://developers.openai.com/api/docs/pricing"
+      },
+      {
+        "title": "Introducing GPT-4.1 in the API | OpenAI",
+        "url": "https://openai.com/index/gpt-4-1/"
+      },
+      {
+        "title": "GPT-4o Pricing 2026 vs GPT-4.1",
+        "url": "https://pecollective.com/tools/gpt-4o-pricing/"
+      },
+      {
+        "title": "docling-project/docling (GitHub, MIT license, formats, local execution)",
+        "url": "https://github.com/docling-project/docling"
+      },
+      {
+        "title": "IBM Granite-Docling: End-to-end document understanding",
+        "url": "https://www.ibm.com/new/announcements/granite-docling-end-to-end-document-conversion"
+      },
+      {
+        "title": "microsoft/markitdown (GitHub)",
+        "url": "https://github.com/microsoft/markitdown"
+      },
+      {
+        "title": "markitdown releases (v0.1.6, May 2026)",
+        "url": "https://github.com/microsoft/markitdown/releases"
+      },
+      {
+        "title": "PyMuPDF license discussion (AGPL/commercial)",
+        "url": "https://github.com/pymupdf/PyMuPDF/discussions/971"
+      },
+      {
+        "title": "PyMuPDF4LLM documentation (Artifex licensing, OCR, Markdown)",
+        "url": "https://pymupdf.readthedocs.io/en/latest/pymupdf4llm/"
+      },
+      {
+        "title": "Best Open-Source PDF-to-Markdown Tools 2026 (Docling vs PyMuPDF4LLM, licensing)",
+        "url": "https://themenonlab.blog/blog/best-open-source-pdf-to-markdown-tools-2026"
+      },
+      {
+        "title": "Unstructured-IO/unstructured (Apache-2.0 open core)",
+        "url": "https://github.com/Unstructured-IO/unstructured"
+      },
+      {
+        "title": "Unstructured pricing",
+        "url": "https://unstructured.io/pricing"
+      },
+      {
+        "title": "python-pptx dependency-risk / inactive maintenance",
+        "url": "https://github.com/SchweizerischeBundesbahnen/pandoc-service/issues/111"
+      },
+      {
+        "title": "python-docx on PyPI (1.2.0)",
+        "url": "https://pypi.org/project/python-docx/"
+      },
+      {
+        "title": "Python OCR with pytesseract (Tesseract 5, 2026)",
+        "url": "https://www.nutrient.io/blog/how-to-use-tesseract-ocr-in-python/"
+      },
+      {
+        "title": "Supabase Pricing 2026: Free Tier Limits",
+        "url": "https://uibakery.io/blog/supabase-pricing"
+      },
+      {
+        "title": "Neon Serverless Postgres Pricing 2026",
+        "url": "https://vela.simplyblock.io/articles/neon-serverless-postgres-pricing-2026/"
+      },
+      {
+        "title": "Qdrant Cloud Pricing 2026: Free Tier",
+        "url": "https://qdrant.tech/pricing/"
+      },
+      {
+        "title": "Chroma vs LanceDB: Best Vector DB for Side Projects 2026",
+        "url": "https://agntup.com/chroma-vs-lancedb-best-vector-database-for-side-projects-in-2026/"
+      }
+    ],
+    "risks": [
+      "Docling's ML-based parsing (layout, tables, OCR) is CPU-bound and can be slow on the GPU-less Ryzen 5 5500U for large/image-heavy files — mitigate by running parsing in a FastAPI background task/worker, not in the request path, and OCR only pages that lack extractable text.",
+      "Licensing trap: defaulting to PyMuPDF/pymupdf4llm pulls in AGPL-3.0; a public SaaS demo can trigger source-disclosure obligations. Prefer MIT-licensed Docling/MarkItDown unless you accept AGPL or buy a commercial license.",
+      "Free-tier idle behavior breaks portfolio demos: Supabase pauses projects after ~1 week idle (manual unpause), and Qdrant free clusters DELETE after 4 weeks idle. Neon's scale-to-zero (auto-resume ~1s) is the safest for an intermittently-visited demo.",
+      "Over-engineering risk: building RAG before checking token counts wastes effort and can lower quality (retrieved fragments vs full section). Gate RAG behind a tiktoken size check so the cheaper long-context path is used when it fits.",
+      "python-docx/python-pptx are inactive (no 2026 releases); relying on them directly risks future Python-version breakage. Avoid by using Docling/MarkItDown, or pin versions if you must use them for low-level OOXML access.",
+      "System-binary dependencies for standalone OCR (Poppler for pdf2image, Tesseract) complicate free-tier/serverless deploys; prefer Docling's integrated OCR or GPT-vision OCR to keep the deploy image simple.",
+      "Garbage-in-garbage-out: poor parsing of multi-column PDFs, scanned pages, or merged-cell tables degrades every downstream quiz. Add a quick eval/guardrail step (answerability, duplicate-option, reading-level checks) and surface low-confidence parses to the teacher for review.",
+      "Embedding/relational drift: if you adopt Chroma/LanceDB/Qdrant as a separate store, you must keep vectors in sync with game/section data. pgvector in the same Postgres avoids this entirely — prefer it.",
+      "Cost creep on OCR: LLM/vision-based OCR (MarkItDown plugin or GPT-4o vision) is billed per call and per image token; for large scanned decks this adds up. Detect scanned pages and batch, or use local Tesseract for bulk OCR."
+    ]
+  },
+  {
+    "dimension": "Prior art and differentiation",
+    "summary": "The gamified-learning market splits into two camps that SyllabusSlayer sits between. Camp 1: classroom quiz-games (Kahoot, Quizizz/Wayground, Blooket, Gimkit) own live/async engagement and teacher dashboards, but their \"games\" are arcade skins over a shared question set, and their AI generation is generic (topic-based or shallow doc upload), not deeply source-grounded. Camp 2: AI question generators (Quizizz AI, Quizgecko, Conker, MagicSchool/MagicQuizzes, Diffit, Khanmigo) excel at turning uploaded PDFs/slides into questions and standards-aligned assessments, but output static quizzes, not a game. The RPG-classroom niche (Classcraft) is effectively dead since HMH gutted it in mid-2024, leaving real demand and several scrappy clones (TeachQuest, ClassMana). The single closest analog is StudyQuest (upload -> AI questions -> 15+ game modes incl. \"Boss Battle\"), but it is a consumer study aid, not a teacher-driven LMS, its games are casual arcade modes rather than a persistent roguelike campaign, and there is no evidence of source citation/grounding. NO product combines all four of: (1) teacher uploads OWN materials, (2) source-grounded/cited questions, (3) a genuine roguelike RPG campaign whose map mirrors syllabus structure, (4) LMS-style teacher review/assign/monitor. That four-way intersection is SyllabusSlayer's defensible, demo-able, and AI-engineering-rich differentiation.",
+    "options": [
+      {
+        "name": "Kahoot",
+        "whatItIs": "The category giant (launched 2013, 10B+ cumulative participants). Live quiz-show loop: question -> answer -> leaderboard. Modes: classic, team, ghost, challenge (homework). 2026 added standards-alignment lookup (TEKS/CCSS/NGSS code -> tagged kahoots).",
+        "pros": "Massive brand recognition and reference design for the live-quiz UX; strong standards alignment; polished analytics.",
+        "cons": "Single quiz-show format (no real game variety); AI/premium tier is enterprise-priced (Kahoot 360 Spirit ~$6,000/yr, 25-license min); generation is not deeply source-grounded.",
+        "fitForProject": "Use as the BENCHMARK for the live/async play loop and reporting polish students expect. SyllabusSlayer should not try to out-scale Kahoot; it differentiates on game depth + source-grounding, not breadth of question types."
+      },
+      {
+        "name": "Quizizz (now Wayground)",
+        "whatItIs": "Engagement + assessment hybrid: live and self-paced/homework modes, memes/avatars/streak bonuses. Quizizz AI generates questions from uploaded PDF/DOC/PPT, Google Drive, public URLs, and YouTube; supports MCQ, T/F, open-ended, reading comprehension, drag-drop, match, reorder.",
+        "pros": "Best-in-class example of the upload -> AI-generate -> edit -> assign -> report flow that is now table stakes; gentle gamification suits self-paced play.",
+        "cons": "Reviewers note its doc-based AI generation is 'less sophisticated than dedicated study tools'; gamification is cosmetic (points/streaks), not a game world; rebrand churn (Quizizz -> Wayground).",
+        "fitForProject": "This IS the teacher-flow table-stakes spec to match: upload, set count/grade/reading level, edit/enhance, assign, per-student/per-question reports. Match it on flow, beat it on game depth and grounding."
+      },
+      {
+        "name": "Blooket",
+        "whatItIs": "Arcade-wrapper model: one question set reused across 27 named game modes (18 free in May 2026, e.g. Tower Defense, Café). ~5M users; overtaking Kahoot in search interest. Ships free Khanmigo AI with no usage caps.",
+        "pros": "Proves the exact thesis SyllabusSlayer leans on: students replay the SAME content far more when it's wrapped in varied game mechanics. Strong free tier.",
+        "cons": "Game modes are loosely coupled to learning (luck/economy can swamp knowledge); no narrative/RPG progression tied to curriculum structure; generation is generic.",
+        "fitForProject": "Strongest validation that game-mechanic variety drives retention. SyllabusSlayer's edge: ONE coherent roguelike campaign mapped to the syllabus, with mechanics that reward knowledge (streak multipliers, HP) rather than RNG."
+      },
+      {
+        "name": "Gimkit",
+        "whatItIs": "Economy/strategy game-based learning (earn virtual currency -> buy power-ups). Smart Repetition cycles missed questions within a session (closest thing to spaced repetition in this group). Seasonal content, KitCollab student-made kits. No real free tier; Pro ~$60/yr.",
+        "pros": "Best example of meaningful in-game economy + power-ups tied to answering, and of adaptive within-session review.",
+        "cons": "Weak/no free tier (cost barrier); strategy layer can overshadow content; no narrative campaign or source-grounding.",
+        "fitForProject": "Directly informs SyllabusSlayer's relics/power-ups/XP economy and 'Smart Repetition'-style re-asking of missed questions. Steal the adaptive-review idea as a credible learning-science feature for the portfolio narrative."
+      },
+      {
+        "name": "Classcraft (defunct as RPG)",
+        "whatItIs": "The original classroom RPG (HP/XP, parties, powers, story). Acquired by Houghton Mifflin Harcourt in 2023; the RPG version was shut down June 30, 2024 and replaced by a stripped, curriculum-locked product. Clones (TeachQuest, ClassMana, EdQuest) sprang up to fill the void.",
+        "pros": "Proves real, durable demand for genuine RPG mechanics in classrooms — and that the incumbent killed the best-loved product, leaving an open lane.",
+        "cons": "It gamified BEHAVIOR/classroom management, not auto-generated content from materials; required heavy teacher setup; now gone.",
+        "fitForProject": "This is the clearest market-gap signal in the whole landscape. Position SyllabusSlayer as 'Classcraft's RPG depth, but the game content is AI-generated from your own syllabus and graded automatically' — the thing Classcraft never did."
+      },
+      {
+        "name": "Duolingo (mechanics reference)",
+        "whatItIs": "Not a competitor, but the gold-standard gamification engine: XP, streaks (loss aversion), segmented weekly leagues, hearts (failure cost), variable rewards, friend streaks; layered mechanics tuned per user lifecycle stage.",
+        "pros": "The definitive playbook for retention mechanics; well-documented results (7-day streak -> 3.6x long-term engagement).",
+        "cons": "N/A as competitor; risk is cargo-culting mechanics onto a product nobody wants to use (their own PM's warning).",
+        "fitForProject": "Direct design source for SyllabusSlayer's HP/streak-multiplier/XP/relic loop. Map: streaks->damage multipliers, hearts->player HP, leagues->class leaderboard, variable rewards->roguelike relic drops. Cite this as deliberate, research-backed design in the portfolio writeup."
+      },
+      {
+        "name": "MagicSchool / MagicQuizzes",
+        "whatItIs": "All-in-one K-12 AI teacher suite (80+ tools). 2026 added MagicQuizzes: standards-aligned MCQ/short-answer with immediate student feedback and teacher result summaries. SOC 2, FERPA/COPPA compliant; Google/Canvas/Classroom integrations.",
+        "pros": "Shows what 'credible AI-for-teachers' looks like in 2026: standards alignment, instant feedback, result summaries, compliance posture.",
+        "cons": "Breadth over depth; quizzes are static formative assessments, no game; not source-grounded RPG.",
+        "fitForProject": "Reference for compliance/positioning language (FERPA/COPPA-aware, standards tags) to make the portfolio LMS look professionally credible. Don't compete on tool breadth."
+      },
+      {
+        "name": "Quizgecko / Conker (AI generators)",
+        "whatItIs": "Quizgecko: PDF/DOC/PPT/URL/YouTube -> quizzes, spaced repetition, Moodle/Canvas export, 50+ languages (~$11/mo). Conker: K-12 standards-aligned (NGSS/TEKS) quiz maker with read-aloud accessibility, Canvas/Google Forms export, free tier 5 quizzes (~$3.99-5.99/mo).",
+        "pros": "Show the commodity baseline for source-to-quiz generation and what cheap pricing/accessibility look like; spaced repetition + LMS export are nice patterns.",
+        "cons": "Pure generators — static output, no gameplay, no campaign, minimal grounding/citation; analytics shallow.",
+        "fitForProject": "Confirms that 'generate questions from an upload' is now commodity and NOT a differentiator on its own. SyllabusSlayer must layer grounding + game + monitoring on top to stand out."
+      },
+      {
+        "name": "StudyQuest (closest analog)",
+        "whatItIs": "Consumer AI study app (Norway): upload PDF/DOCX/slide-image/text -> AI auto-generates questions -> play 15+ modes including 'Boss Battle' (defeat AI-generated themed bosses), plus Flashcards, multiplayer, progress tracking. Freemium. Teachers can upload to make class games.",
+        "pros": "Closest existing combination of upload -> AI questions -> game (and even has a 'Boss Battle' mode), validating the core concept is buildable and appealing.",
+        "cons": "Consumer study aid, not a teacher-first LMS; games are disconnected casual arcade modes, NOT a persistent roguelike campaign mapped to a syllabus; no evidence of source-grounding/citations, teacher review/edit workflow, or class-monitoring dashboards; no roguelike run/relic/permadeath structure.",
+        "fitForProject": "The most important competitor to study and out-position. SyllabusSlayer's wedge vs StudyQuest: (1) teacher-authored, source-grounded & cited questions; (2) a single coherent ROGUELIKE CAMPAIGN whose map mirrors syllabus structure (runs, relics, escalating bosses) instead of detached mini-games; (3) full LMS loop (review/edit/assign/monitor). Name this gap explicitly in the portfolio."
+      }
+    ],
+    "recommendation": "Build to a clearly-articulated wedge: 'The teacher uploads their OWN syllabus; an AI pipeline turns it into a source-grounded roguelike RPG campaign whose map mirrors the course structure, and the teacher reviews, assigns, and monitors it like an LMS.' No surveyed product hits all four pillars (own-materials + grounding + true roguelike campaign + LMS loop); StudyQuest is closest but is a consumer arcade study aid with no grounding, no campaign structure, and no teacher monitoring.\n\nFor the portfolio, lean HARD into the AI-engineering surface that competitors treat as commodity, because that is what an AI-engineer reviewer will judge:\n1) Source-grounding as the headline feature. Every generated question must carry a citation back to the exact source span (page/slide/paragraph) it came from — this is the MAGMA-Learning research pattern and the single biggest credibility/differentiation lever. Implement via chunked ingestion + retrieval, then generate questions constrained to retrieved spans, and STORE the provenance. Surface it in the teacher review UI ('this question came from slide 14') and optionally to students as post-answer feedback. This also powers your guardrail story: a faithfulness/groundedness check (LLM-as-judge) that rejects hallucinated or off-syllabus questions.\n2) Structured generation + evals as a visible artifact. Use OpenAI structured outputs (JSON schema / function calling) to emit a typed game spec (campaign -> regions = syllabus units -> bosses = topics -> questions with difficulty, distractors, citations, answer). Build a small but real eval harness: groundedness, answerability, distractor quality, difficulty calibration, duplicate detection — and show the metrics in the README. This is the portfolio centerpiece; quiz generation alone is commodity (Quizgecko/Conker prove it), evals + grounding are not.\n3) Make the roguelike structurally mirror the syllabus (this is the novel, demo-able 'wow'): syllabus document structure -> campaign map; units/modules -> regions/levels; topics/learning-objectives -> bosses; sub-skills -> minions; difficulty tags -> boss HP/attack scaling. Roguelike run mechanics map cleanly onto learning-science you can cite: streaks -> damage multipliers (Duolingo streak/loss-aversion), wrong answers -> HP loss (hearts/failure cost), relics/power-ups -> Gimkit-style economy, missed-question re-asking within/after a run -> Gimkit Smart Repetition / spaced repetition. Frame these as deliberate, research-backed choices in the writeup.\n\nTable-stakes you MUST ship to look credible (do these even though they are not the differentiator):\nTEACHER FLOW: upload (PDF/DOCX/PPTX/notes) -> generate -> a REVIEW/EDIT screen where the teacher can edit, regenerate, or discard each question (the Quizizz/Edpuzzle 'mandatory human review' pattern — never auto-assign unreviewed AI content) -> set difficulty/count/reading level -> assign to a class/roster -> a monitoring dashboard with class view + per-student view + per-topic mastery heatmap and at-risk flags (the 2026 baseline). Include a small 'tweak the generated game' affordance (rename bosses, reorder map, adjust HP) since teacher customization is expected.\nSTUDENT FLOW: join via class code (frictionless, Kahoot/Blooket pattern) -> play the campaign -> immediate per-answer feedback (ideally with the source citation) -> XP/level/relics persistence -> progress map showing conquered vs remaining topics. Add streaks + a class leaderboard for retention.\n\nScope discipline for a free-tier, no-GPU, solo portfolio build: pick ONE depth of roguelike (a single linear-ish campaign with branching is enough — don't build a full procedural meta-progression), support a 2-3 question types well (MCQ + short-answer with LLM grading + maybe ordering), and ship 2-3 boss 'mechanics' rather than 12. Use gpt-4o-mini-class generation for cost, cache the generated game spec (generation is one-time per upload, not per-play, which keeps OpenAI spend trivial), and gate any per-answer LLM grading behind cheap exact-match first. Compliance/positioning: mention FERPA/COPPA-awareness and store no real student PII in the demo (MagicSchool-style credibility signal). Write the README around the AI pipeline + evals + grounding, with a 60-second demo video of upload -> generated campaign -> boss fight — that is the artifact that wins an AI-engineer portfolio review.",
+    "keyFacts": [
+      "Classcraft's original RPG product was shut down by Houghton Mifflin Harcourt on June 30, 2024 (acquired May 2023) and replaced with a stripped, curriculum-locked version; clones TeachQuest/ClassMana/EdQuest emerged to fill the gap — leaving the AI-RPG-classroom lane open.",
+      "Quizizz rebranded to 'Wayground' (2025-2026); its AI generates questions from uploaded PDF/DOC/PPT, Google Drive, public URLs, and YouTube, with MCQ/T-F/open-ended/reading-comprehension + drag-drop/match/reorder conversions.",
+      "Blooket ships 27 named game modes (18 free) as of May 2026 and includes free Khanmigo AI with no usage caps; it has overtaken Kahoot in search interest — validating that game-mode variety over a shared question set drives replay.",
+      "Gimkit's 'Smart Repetition' cycles missed questions more frequently within a session (the closest thing to spaced repetition among the major platforms); it has effectively no free tier (Pro ~$60/yr).",
+      "Kahoot's AI/premium 'Kahoot 360 Spirit' starts at ~$6,000/yr with a 25-license minimum (enterprise-priced) — not a model for a portfolio piece.",
+      "MagicSchool added 'MagicQuizzes' in 2026 (standards-aligned MCQ/short-answer, immediate feedback, teacher result summaries); platform is SOC 2 certified and FERPA/COPPA-compliant — the 2026 bar for credible AI teacher tools.",
+      "Khanmigo (GPT-4-powered) is free for teachers in 44+ countries (Microsoft-supported) and $4/mo for learners/parents; student access is gated behind school/district or parent accounts for safety.",
+      "Commodity AI quiz generators: Quizgecko (~$11/mo; PDF/DOC/PPT/URL/YouTube -> quizzes, spaced repetition, Moodle/Canvas export, 50+ languages) and Conker (~$3.99-5.99/mo; NGSS/TEKS standards alignment, read-aloud accessibility, free tier of 5 quizzes).",
+      "StudyQuest (studyquest.app, Norway) is the closest analog: upload PDF/DOCX/slides/text -> AI auto-generates questions -> 15+ game modes including 'Boss Battle' (defeat AI-generated themed bosses); freemium; teachers can upload to make class games — BUT it is a consumer study aid with detached arcade modes, no roguelike campaign, no source-grounding/citations, and no teacher review/monitoring LMS loop.",
+      "Source-grounding precedent: a 2023 'personal AI tutor' study (MAGMA Learning, arXiv 2309.13060) generated 800 questions from lecture materials with EACH question linked to the specific lecture slide it came from — the source-citation pattern SyllabusSlayer should adopt as its headline differentiator.",
+      "2026 LMS teacher-dashboard table stakes: real-time progress analytics with class/student/topic views + mastery heatmaps, at-risk/early-warning flags, role-based access, LMS integrations (Google Classroom/Canvas), and AI question generation WITH a mandatory human edit/discard review step before assigning.",
+      "Duolingo gamification facts used as design precedent: maintaining a 7-day streak makes users 3.6x more likely to stay engaged long-term; mechanics are layered by user lifecycle (day-one wins -> streaks/leagues -> rare long-term targets); streaks work via loss aversion."
+    ],
+    "citations": [
+      {
+        "title": "Learning Games: Blooket vs Kahoot vs Gimkit vs Quizizz (Roundup)",
+        "url": "https://slideswith.com/blog/blooket-vs-kahoot-vs-gimkit-vs-quizizz"
+      },
+      {
+        "title": "Kahoot vs Blooket vs Gimkit: Free AI, Modes, Retention [2026]",
+        "url": "https://learnclash.com/blog/kahoot-vs-blooket-vs-gimkit"
+      },
+      {
+        "title": "Gimkit vs Kahoot, Quizizz, and Blooket: Best Game-Based Learning Platform?",
+        "url": "https://gimkithome.org/education/gimkit-vs-kahoot-quizizz-and-blooket-best-game-based-learning-platform/"
+      },
+      {
+        "title": "Quizizz AI Question Generator (official)",
+        "url": "https://quizizz.com/home/quizizz-ai/ai-question-generator"
+      },
+      {
+        "title": "Quizizz AI: Create Assessments from Documents, Images & More (support)",
+        "url": "https://support.quizizz.com/hc/en-us/articles/21615394077337-Quizizz-AI-Create-Assessments-from-Documents-Images-More"
+      },
+      {
+        "title": "Urge Houghton Mifflin Harcourt to Retain Classcraft in Its Current Form (petition)",
+        "url": "https://www.change.org/p/urge-houghton-mifflin-harcourt-to-retain-classcraft-in-its-current-form"
+      },
+      {
+        "title": "Classcraft Closure: How TeachQuest Became the Alternative",
+        "url": "https://classcraft-alternative.com/"
+      },
+      {
+        "title": "R.I.P. ClassCraft – EMC2 Learning",
+        "url": "https://emc2learning.com/r-i-p-classcraft/"
+      },
+      {
+        "title": "Duolingo Gamification Strategy: A Full Case Study (2026)",
+        "url": "https://trophy.so/blog/duolingo-gamification-case-study"
+      },
+      {
+        "title": "Duolingo gamification explained — StriveCloud",
+        "url": "https://www.strivecloud.io/blog/gamification-examples-boost-user-retention-duolingo"
+      },
+      {
+        "title": "AI Teaching Tools updates 2026 — MagicSchool",
+        "url": "https://www.magicschool.ai/blog-posts/ai-teaching-tools-updates-2026"
+      },
+      {
+        "title": "Diffit / MagicSchool / best AI tools for teachers 2026 — Storyflow",
+        "url": "https://storyflow.so/blog/best-ai-tools-for-teachers-2026"
+      },
+      {
+        "title": "Khanmigo pricing: Free for teachers, $4/month for learners (official)",
+        "url": "https://www.khanmigo.ai/pricing"
+      },
+      {
+        "title": "Khanmigo for teachers (official)",
+        "url": "https://www.khanmigo.ai/teachers"
+      },
+      {
+        "title": "Conker vs Quizgecko comparison — Revoyant",
+        "url": "https://www.revoyant.com/compare/conker-vs-quizgecko"
+      },
+      {
+        "title": "15 best AI quiz generators for January 2026 — Jotform",
+        "url": "https://www.jotform.com/ai/ai-quiz-generators/"
+      },
+      {
+        "title": "StudyQuest — Transform Study Materials into Engaging Games (official)",
+        "url": "https://www.studyquest.app/"
+      },
+      {
+        "title": "StudyQuest AI Study Games / Boss Battle modes (official)",
+        "url": "https://studyquest.app/games/"
+      },
+      {
+        "title": "Implementing Learning Principles with a Personal AI Tutor: A Case Study (arXiv 2309.13060)",
+        "url": "https://arxiv.org/pdf/2309.13060"
+      },
+      {
+        "title": "Education Analytics Dashboards: Complete Guide — GitNexa",
+        "url": "https://www.gitnexa.com/blogs/education-analytics-dashboard"
+      },
+      {
+        "title": "EdTech Cool Tool: Edpuzzle AI Question Generator & human review workflow — Control Alt Achieve",
+        "url": "https://www.controlaltachieve.com/2023/12/edtech-cool-tool-edpuzzle-teacher-assist.html"
+      }
+    ],
+    "risks": [
+      "Concept-collision risk: StudyQuest already does upload -> AI questions -> 'Boss Battle' mode. Differentiation MUST be executed and made visible (source-grounding/citations + a true roguelike campaign mapped to syllabus structure + teacher review/monitor), or the project reads as a StudyQuest clone. Name the gap explicitly in the README.",
+      "Commodity-feature trap: 'generate questions from an upload' is now table stakes (Quizizz, Quizgecko, Conker, MagicSchool). If the portfolio emphasizes generation rather than grounding + evals + guardrails, it will not stand out to an AI-engineer reviewer.",
+      "Scope creep: a 'full' roguelike (procedural maps, meta-progression, dozens of relics/bosses) plus a full LMS is far too much for a solo, free-tier, no-GPU portfolio build. Constrain to one campaign shape, 2-3 question types, 2-3 boss mechanics; cache the generated game spec so OpenAI spend is one-time-per-upload.",
+      "Grounding is genuinely hard: PDFs/slides/DOCX vary wildly (scanned images, tables, multi-column). Ingestion + reliable span-level provenance is the riskiest engineering piece — but it is also the differentiator, so budget time accordingly and have a fallback (page-level rather than span-level citation).",
+      "Game-vs-learning tension (the Blooket/Gimkit failure mode): if RNG/relics/HP dominate, students win by luck not knowledge. Ensure mechanics reward correctness (streak multipliers, damage = mastery) and that wrong answers always have a learning consequence/feedback loop.",
+      "Compliance optics: real classroom use implies FERPA/COPPA and student PII. For a public portfolio demo, avoid storing real minors' PII (use synthetic rosters/class codes) and state the compliance posture, mirroring MagicSchool's SOC2/FERPA/COPPA signaling — otherwise the LMS claim looks naive.",
+      "Source freshness: several supporting stats (retention %, 'hours saved', user counts) come from vendor blogs/listicles and should be treated as directional, not authoritative; official pages (Khanmigo, Quizizz, StudyQuest) were prioritized for hard product facts but model/price details still change frequently in 2026."
+    ]
+  },
+  {
+    "dimension": "AI-generated game content JSON schema",
+    "summary": "For SyllabusSlayer's roguelike quiz-RPG, the right schema is a flat-ish, reference-based model that fits OpenAI Structured Outputs' hard constraints (max 100 object properties, max 5 nesting levels, 500 enum values, 15K chars across names/defs/enums) rather than a deeply nested tree. The biggest design risk is that Structured Outputs uses ONE schema per call with strict mode (every field required, additionalProperties:false, root must be an object, no pattern/format/min/max enforcement), so a single monolithic Campaign→Act→Encounter→Question schema would blow the depth/property budget and produce poor generation. The recommended approach is a discriminated-union Question model (a \"questionType\" enum tag plus a single flat union of per-type fields), generated in stages: first an outline pass (campaign + acts + encounter stubs), then per-encounter question batches. Combat/RPG tuning lives in a separate, deterministic layer the backend computes — NOT something the LLM invents — so balance stays sane and the LLM only fills pedagogical fields. Source-grounding (chunk IDs + quote) is a required field on every question to support the \"serious AI engineering\" eval/guardrail story. Existing standards (QTI 3.0 interactions, H5P Question Set/Branching Scenario, Kahoot's flat question/choices/points/time model, GIFT) inform the question taxonomy but are all too heavy or too text-based to adopt wholesale; the proposed schema borrows their question-type vocabulary while staying lean enough for reliable LLM generation and clean Pydantic/Zod mirroring.",
+    "options": [
+      {
+        "name": "Discriminated-union Question model + staged generation (RECOMMENDED)",
+        "whatItIs": "One Question object carries a 'questionType' enum tag and a flat set of optional-by-null per-type fields (options[], correctOptionIds[], pairs[], orderedItems[], acceptedAnswers[], etc.). Campaign/Act/Encounter/Question hierarchy exists logically but is generated in separate LLM calls (outline pass, then per-encounter question batches) and stitched by ID references, never as one giant nested payload.",
+        "pros": "Each LLM call stays well under the 100-property/5-level Structured Outputs limits; strict-mode-friendly (all fields required, nulls for inapplicable type fields); maps 1:1 to a Pydantic discriminated union and a Zod discriminatedUnion; staged generation keeps each call cheap on gpt-5.4-mini and enables per-stage evals/retries; flat union is the pattern OpenAI itself recommends over deep nesting.",
+        "cons": "More orchestration code (multiple calls, ID stitching, assembly/validation layer); the 'all type-fields present but null' shape is slightly verbose; requires a post-validation step to assert per-type field presence (Structured Outputs won't enforce 'if MCQ then options non-empty').",
+        "fitForProject": "Best fit. Directly satisfies (a) reliable Structured Outputs generation, (b) full client renderability via a discriminator switch in React, (c) dual validation. Staged calls suit the portfolio budget and showcase real AI-engineering pipeline design."
+      },
+      {
+        "name": "Single monolithic nested schema (Campaign with embedded acts→encounters→questions)",
+        "whatItIs": "One Pydantic/JSON schema describing the entire campaign tree, passed in a single Structured Outputs call that returns the whole game at once.",
+        "pros": "Conceptually simplest; one call, one object, one validation; no ID-stitching.",
+        "cons": "Campaign→Act→Encounter→Question→options[].field is already ~5+ levels deep, hitting the nesting cap; total property count across all nested objects easily exceeds 100; large single generations are slower, costlier, more error-prone, and harder to retry/eval granularly; a single malformed deep branch fails the entire game.",
+        "fitForProject": "Poor fit. Violates the explicit 'avoid excessive nesting, prefer flat referenced structures' requirement and the measured 5-level/100-property limits."
+      },
+      {
+        "name": "Adopt an existing standard wholesale (QTI 3.0 or H5P content.json)",
+        "whatItIs": "Emit QTI 3.0 XML/JSON interactions (qti-choice-interaction, qti-match-interaction, qti-order-interaction) or H5P content.json (Question Set / Branching Scenario) directly from the LLM.",
+        "pros": "Battle-tested pedagogical taxonomy and accessibility metadata; interoperable with real LMSs; signals domain awareness.",
+        "cons": "QTI is verbose XML-derived with response-processing templates and shared-vocabulary CSS classes — far too heavy to generate reliably via Structured Outputs and overkill to render in a custom Next.js game; H5P content.json is library-versioned, deeply nested, and built for its own player runtime, not a roguelike combat UI; neither models HP/damage/relics.",
+        "fitForProject": "Use as inspiration only. Borrow the interaction-type vocabulary (choice/multi/order/match/gap-match) and Bloom tagging, but do not adopt the wire formats — they fight Structured Outputs limits and add no game-combat value."
+      },
+      {
+        "name": "Flat Kahoot/GIFT-style quiz model (no RPG layer)",
+        "whatItIs": "A flat list of questions with text/choices/correct/points/time, like Kahoot's JSON or Moodle GIFT, with combat bolted on as ad-hoc fields.",
+        "pros": "Extremely simple and very reliable to generate; trivially renderable; matches familiar quiz tools.",
+        "cons": "No hierarchy mapping to syllabus topics, no encounter/boss structure, no relics/XP/leveling, no source-grounding, no Bloom difficulty; would make SyllabusSlayer just a quiz, not a roguelike — undercutting the core product pitch and the AI-engineering depth.",
+        "fitForProject": "Insufficient alone, but its flatness is the right instinct. The recommended schema keeps the flat-question virtue while adding the campaign hierarchy and a separate deterministic combat layer."
+      }
+    ],
+    "recommendation": "RECOMMENDED ARCHITECTURE: Split the data into a PEDAGOGICAL layer (LLM-generated via Structured Outputs) and a COMBAT/RPG TUNING layer (deterministically computed by the FastAPI backend from difficulty/Bloom + designer constants). The LLM should NEVER invent HP/damage numbers — it only fills educational fields plus a per-item difficulty/Bloom tag and source grounding. Generate in two staged calls to stay under Structured Outputs limits (max 100 properties, 5 nesting levels, 500 enums, 15K chars of names/defs/enums; strict mode = every field required + additionalProperties:false + root is an object; pattern/format/min/max are NOT enforced so validate ranges in code; optional fields are expressed as type unions with null).\n\nSTAGE 1 (Outline): one Structured Outputs call -> Campaign + Acts + Encounter STUBS (no questions). STAGE 2 (per encounter): one call per encounter -> a batch of Questions. Backend stitches by IDs and computes combat tuning. This keeps every individual schema shallow (<=3 levels) and small.\n\n------------------------------------------------------------\nPYDANTIC-STYLE SCHEMA (backend source of truth; mirror in Zod on frontend)\n------------------------------------------------------------\n\n# ---- ENUMS ----\nQuestionType = Enum: \"multiple_choice\" | \"multi_select\" | \"true_false\" | \"short_answer\" | \"ordering\" | \"matching\"\nBloomLevel   = Enum: \"remember\" | \"understand\" | \"apply\" | \"analyze\" | \"evaluate\" | \"create\"   # revised Bloom (Anderson/Krathwohl 2001)\nDifficulty   = Enum: \"easy\" | \"medium\" | \"hard\"\nEncounterKind= Enum: \"minion\" | \"elite\" | \"boss\"\nRewardKind   = Enum: \"relic\" | \"powerup\" | \"xp\" | \"heal\"\n\n# ---- STAGE 1 OUTPUT: CampaignOutline (one Structured Outputs call) ----\nCampaignOutline:\n  schemaVersion: str                      # e.g. \"1.0.0\" (validate in code)\n  campaignId: str                         # backend may overwrite with a UUID\n  title: str\n  description: str\n  sourceDocumentId: str                   # which uploaded resource this came from\n  acts: list[ActStub]                     # array of objects (flat, not deeply nested)\n\nActStub:                                  # one Act == one top-level syllabus topic\n  actId: str\n  order: int\n  title: str\n  syllabusTopic: str                      # the mapped topic/chapter heading from the source\n  summary: str\n  encounters: list[EncounterStub]\n\nEncounterStub:                            # boss/elite/minion fight, no questions yet\n  encounterId: str\n  order: int\n  kind: EncounterKind\n  title: str                              # e.g. \"Mitochondria, the Powerhouse Boss\"\n  enemyName: str\n  enemyFlavor: str                        # short narrative blurb (Twine/Ink-style flavor)\n  subTopic: str                           # sub-section of the act this fight covers\n  targetQuestionCount: int                # how many questions Stage 2 should generate\n  # NOTE: depth here = CampaignOutline.acts[].encounters[] = 3 levels. Safe.\n\n# ---- STAGE 2 OUTPUT: QuestionBatch (one call per encounter) ----\nQuestionBatch:\n  encounterId: str                        # echoes the stub it belongs to\n  questions: list[Question]\n\n# ---- THE DISCRIMINATED-UNION QUESTION (the heart of the schema) ----\n# Single flat object. questionType is the discriminator. Per-type fields are\n# present but null when not applicable (strict-mode requires all fields present).\nQuestion:\n  questionId: str\n  questionType: QuestionType              # discriminator\n  bloomLevel: BloomLevel\n  difficulty: Difficulty\n  prompt: str                             # the question stem / rich text\n  # --- source grounding (REQUIRED on every item; powers evals + guardrails) ---\n  sourceChunkIds: list[str]               # ids of the retrieved chunks used\n  sourceQuote: str                        # verbatim snippet the item is grounded in\n  sourcePage: int | null                  # page/slide number if known\n  # --- feedback ---\n  explanation: str                        # why the correct answer is correct\n  hint: str | null                        # optional pre-answer nudge\n  # --- per-type fields (exactly one cluster is non-null per questionType) ---\n  options: list[Option] | null            # multiple_choice, multi_select\n  correctOptionIds: list[str] | null      # ids into options[] (1 for MC, >=1 for multi)\n  correctBoolean: bool | null             # true_false\n  acceptedAnswers: list[str] | null       # short_answer (case-insensitive accept list)\n  caseSensitive: bool | null              # short_answer\n  orderedItems: list[OrderedItem] | null  # ordering (correct sequence by .order)\n  matchPairs: list[MatchPair] | null      # matching\n\nOption:\n  optionId: str\n  text: str\n\nOrderedItem:\n  itemId: str\n  text: str\n  order: int                              # the CORRECT position (1-based)\n\nMatchPair:\n  pairId: str\n  left: str\n  right: str                              # correct counterpart of left\n\n# Max nesting in Stage 2: QuestionBatch.questions[].options[].text = 3 levels. Safe.\n# Property count per call is well under 100. Enum values total < 30. Good.\n\n------------------------------------------------------------\nCOMBAT / RPG TUNING (computed by backend, NOT by the LLM)\n------------------------------------------------------------\nStored alongside the generated content (in DB / served to client), produced\ndeterministically from difficulty + Bloom + designer constants so balance is stable:\n\nCombatConfig (per campaign):\n  playerStartingHp: int                   # e.g. 100\n  baseDamagePerCorrect: int               # e.g. 10\n  streakMultipliers: list[float]          # e.g. [1.0, 1.25, 1.5, 2.0] indexed by streak tier\n  wrongAnswerHpCost: int                  # e.g. 8\n  xpPerCorrectByDifficulty: {easy:int, medium:int, hard:int}  # e.g. {10,20,35}\n  levelXpCurve: list[int]                 # cumulative XP thresholds per level\n\nEncounterCombat (per encounter, derived):\n  enemyMaxHp: int                         # = sum over questions of expectedDamage, scaled by kind\n  enemyBaseDamage: int                    # damage enemy deals on a wrong/timeout\n  kindHpMultiplier: float                 # minion 1.0 / elite 1.5 / boss 2.5\n\nReward (per encounter or level-up):\n  rewardId: str\n  kind: RewardKind                        # relic | powerup | xp | heal\n  name: str\n  description: str\n  magnitude: int                          # e.g. +15 max HP, +0.25 streak mult, etc.\n# Relic/powerup CATALOG is authored once by you (a fixed table); the backend\n# assigns drops. The LLM may optionally THEME a relic name to the topic, but\n# never sets magnitudes.\n\n------------------------------------------------------------\nEXAMPLE INSTANCE (assembled, abbreviated)\n------------------------------------------------------------\n{\n  \"schemaVersion\": \"1.0.0\",\n  \"campaignId\": \"camp_bio101\",\n  \"title\": \"Cell Biology: The Organelle Wars\",\n  \"description\": \"Battle through the cell, one organelle boss at a time.\",\n  \"sourceDocumentId\": \"doc_lecture3_pdf\",\n  \"combatConfig\": {\n    \"playerStartingHp\": 100, \"baseDamagePerCorrect\": 10,\n    \"streakMultipliers\": [1.0, 1.25, 1.5, 2.0], \"wrongAnswerHpCost\": 8,\n    \"xpPerCorrectByDifficulty\": {\"easy\": 10, \"medium\": 20, \"hard\": 35},\n    \"levelXpCurve\": [0, 100, 250, 450, 700]\n  },\n  \"acts\": [{\n    \"actId\": \"act_organelles\", \"order\": 1, \"title\": \"Inside the Cell\",\n    \"syllabusTopic\": \"Eukaryotic Cell Structure\",\n    \"summary\": \"Organelles and their functions.\",\n    \"encounters\": [{\n      \"encounterId\": \"enc_mito\", \"order\": 1, \"kind\": \"boss\",\n      \"title\": \"Mitochondria, the Powerhouse Boss\",\n      \"enemyName\": \"ATP-Reaver\", \"enemyFlavor\": \"It hums with stolen energy.\",\n      \"subTopic\": \"Mitochondria\", \"targetQuestionCount\": 3,\n      \"combat\": {\"enemyMaxHp\": 90, \"enemyBaseDamage\": 8, \"kindHpMultiplier\": 2.5},\n      \"rewards\": [{\"rewardId\":\"rel_cristae\",\"kind\":\"relic\",\"name\":\"Folded Cristae\",\n                   \"description\":\"+20% damage while streak >= 3\",\"magnitude\":20}],\n      \"questions\": [\n        {\n          \"questionId\": \"q1\", \"questionType\": \"multiple_choice\",\n          \"bloomLevel\": \"remember\", \"difficulty\": \"easy\",\n          \"prompt\": \"What is the primary function of the mitochondrion?\",\n          \"sourceChunkIds\": [\"doc_lecture3_pdf::chunk_14\"],\n          \"sourceQuote\": \"Mitochondria are the site of ATP production via oxidative phosphorylation.\",\n          \"sourcePage\": 7,\n          \"explanation\": \"Mitochondria generate ATP through oxidative phosphorylation.\",\n          \"hint\": \"Think 'powerhouse'.\",\n          \"options\": [\n            {\"optionId\":\"a\",\"text\":\"ATP production\"},\n            {\"optionId\":\"b\",\"text\":\"Protein folding\"},\n            {\"optionId\":\"c\",\"text\":\"Lipid storage\"},\n            {\"optionId\":\"d\",\"text\":\"DNA replication\"}\n          ],\n          \"correctOptionIds\": [\"a\"],\n          \"correctBoolean\": null, \"acceptedAnswers\": null, \"caseSensitive\": null,\n          \"orderedItems\": null, \"matchPairs\": null\n        },\n        {\n          \"questionId\": \"q2\", \"questionType\": \"ordering\",\n          \"bloomLevel\": \"understand\", \"difficulty\": \"medium\",\n          \"prompt\": \"Order the stages of cellular respiration.\",\n          \"sourceChunkIds\": [\"doc_lecture3_pdf::chunk_15\"],\n          \"sourceQuote\": \"Glycolysis precedes the Krebs cycle, followed by the electron transport chain.\",\n          \"sourcePage\": 8,\n          \"explanation\": \"Glycolysis -> Krebs cycle -> electron transport chain.\",\n          \"hint\": null,\n          \"options\": null, \"correctOptionIds\": null, \"correctBoolean\": null,\n          \"acceptedAnswers\": null, \"caseSensitive\": null,\n          \"orderedItems\": [\n            {\"itemId\":\"o1\",\"text\":\"Glycolysis\",\"order\":1},\n            {\"itemId\":\"o2\",\"text\":\"Krebs cycle\",\"order\":2},\n            {\"itemId\":\"o3\",\"text\":\"Electron transport chain\",\"order\":3}\n          ],\n          \"matchPairs\": null\n        }\n      ]\n    }]\n  }]\n}\n\n------------------------------------------------------------\nIMPLEMENTATION NOTES FOR THIS PROJECT\n------------------------------------------------------------\n- Pydantic: model Question as a single class with all fields, OR use a typed\n  Union[MultipleChoiceQ, MultiSelectQ, ...] with Field(discriminator=\"questionType\").\n  The single-flat-class-with-nulls form is the safest for Structured Outputs strict\n  mode; convert to the rich discriminated union in a post-parse step where you also\n  run a validator asserting the right cluster is non-null per type and ranges are sane\n  (Structured Outputs does NOT enforce min/max/non-empty).\n- Frontend: Zod z.discriminatedUnion(\"questionType\", [...]) gives you exhaustive\n  switch rendering and compile-time safety in the React renderer.\n- Model choice: use gpt-5.4-mini ($0.75 in / $4.50 out per 1M) for question batches\n  with Structured Outputs; reserve gpt-5.4 ($2.50/$15) for the outline/quality-critical\n  passes. Cache the system prompt (90% cached-input discount) since it repeats per call.\n- Keep schemaVersion in every payload so stored games survive schema evolution.",
+    "keyFacts": [
+      "OpenAI Structured Outputs limits (2026): max 100 object properties total, max 5 levels of nesting, max 500 enum values total, and combined names/definitions/enum/const characters must not exceed 15,000.",
+      "Structured Outputs strict mode requires: every property listed in 'required' (no native optionals), additionalProperties:false on every object, and the root must be an object (cannot return a bare array — wrap as {items:[...]}).",
+      "Optional fields in strict mode are expressed as a type union with null, e.g. type:['string','null']; the field still must be marked required.",
+      "Structured Outputs does NOT enforce pattern, format, minLength, minimum, maximum — content/range validation must be done in application code.",
+      "OpenAI's CFG-based Structured Outputs DOES support recursive schemas via $ref:'#', but flatter array/enum-based schemas are still recommended for reliability.",
+      "First request with a new schema incurs extra latency while OpenAI compiles+caches it; subsequent calls with the same schema are fast.",
+      "Revised Bloom's taxonomy (Anderson & Krathwohl, 2001) has six verb-based levels: remember, understand, apply, analyze, evaluate, create (Evaluate now below Create).",
+      "QTI 3.0 interaction types include qti-choice-interaction, qti-match-interaction, qti-order-interaction, qti-associate-interaction, qti-gap-match-interaction, extended-text — the vocabulary maps cleanly to MC/multi/matching/ordering/short-answer.",
+      "H5P container types Question Set and Branching Scenario bundle question types (Single Choice Set, Multichoice, True/False, Drag the Text, Mark the Words, Image Sequencing) and store config as JSON in content.json inside a versioned .h5p package.",
+      "Kahoot's quiz JSON is flat: a questions array where each question has question text, time (ms), points, numberOfAnswers, and a choices array of {answer, correct}; single-select up to 1000 pts, multi-select up to 500 pts/correct, 2-6 answers.",
+      "GIFT (Moodle) is a plain-text picoformat (=correct, ~distractor, T/F, {} answer blocks) for MC, true/false, short-answer, matching, missing-word, numerical, essay — not JSON.",
+      "OpenAI API pricing (June 2026, per 1M tokens, standard tier): gpt-5.5 $5.00 in / $0.50 cached / $30.00 out; gpt-5.4 $2.50 / $0.25 / $15.00; gpt-5.4-mini $0.75 / $0.075 / $4.50; gpt-5.4-nano $0.20 / $0.02 / $1.25.",
+      "gpt-5.5 supports Structured Outputs; Structured Outputs carries no separate fee (tokens billed at the model's normal rates); cached input gets ~90% discount which helps repeated system prompts."
+    ],
+    "citations": [
+      {
+        "title": "Structured model outputs | OpenAI API (official guide)",
+        "url": "https://developers.openai.com/api/docs/guides/structured-outputs"
+      },
+      {
+        "title": "Introducing Structured Outputs in the API | OpenAI",
+        "url": "https://openai.com/index/introducing-structured-outputs-in-the-api/"
+      },
+      {
+        "title": "Measuring Maximum Depth and Object Properties in Structured Outputs — OpenAI Developer Community",
+        "url": "https://community.openai.com/t/measuring-maximum-depth-and-object-properties-in-structured-outputs/918388"
+      },
+      {
+        "title": "OpenAI Structured Outputs JSON Schema: a practical guide (limits)",
+        "url": "https://www.codewords.ai/blog/openai-structured-outputs-json-schema"
+      },
+      {
+        "title": "Pricing | OpenAI API",
+        "url": "https://developers.openai.com/api/docs/pricing"
+      },
+      {
+        "title": "GPT-5.5 Model | OpenAI API",
+        "url": "https://developers.openai.com/api/docs/models/gpt-5.5"
+      },
+      {
+        "title": "Current OpenAI API Pricing 2026 — DevTk.AI",
+        "url": "https://devtk.ai/en/blog/openai-api-pricing-guide-2026/"
+      },
+      {
+        "title": "QTI v3 Best Practices and Implementation Guide | 1EdTech",
+        "url": "https://www.imsglobal.org/spec/qti/v3p0/impl"
+      },
+      {
+        "title": "1EdTech QTI 3 Beginner's Guide",
+        "url": "https://www.imsglobal.org/spec/qti/v3p0/guide"
+      },
+      {
+        "title": "H5P Branching Scenario",
+        "url": "https://h5p.org/branching-scenario"
+      },
+      {
+        "title": "Moodle Plugins directory: H5P content types (Question Set imports)",
+        "url": "https://moodle.org/plugins/qformat_h5p"
+      },
+      {
+        "title": "KahootQuizMaker.py — quiztools (Kahoot JSON question/choices model)",
+        "url": "https://github.com/hplgit/quiztools/blob/master/quiztools/KahootQuizMaker.py"
+      },
+      {
+        "title": "GIFT format — MoodleDocs",
+        "url": "https://docs.moodle.org/502/en/GIFT_format"
+      },
+      {
+        "title": "Bloom's Revised Taxonomy — Colorado College",
+        "url": "https://www.coloradocollege.edu/other/assessment/how-to-assess-learning/learning-outcomes/blooms-revised-taxonomy.html"
+      },
+      {
+        "title": "ink/Documentation/WritingWithInk.md (knots/stitches/diverts)",
+        "url": "https://github.com/inkle/ink/blob/master/Documentation/WritingWithInk.md"
+      },
+      {
+        "title": "Authoring interactive narrative in Twine 2 vs Ink — Medium",
+        "url": "https://medium.com/@haikus_by_KN/authoring-interactive-narrative-in-twine-2-vs-ink-a-quick-and-dirty-comparison-using-examples-e695eb4dfc3e"
+      }
+    ],
+    "risks": [
+      "Structured Outputs will NOT enforce that the correct per-type field cluster is populated (e.g. a multiple_choice item could come back with null options) or that ranges/non-empty hold — you MUST add a backend post-validation pass (Pydantic validators) and a frontend Zod refine; otherwise the client renderer can crash on malformed items.",
+      "The 'all type-fields present, null when unused' pattern bloats token output (every question carries 8 mostly-null fields). For very large campaigns this raises cost and can approach the 100-property limit if you later add many types; mitigate by generating per-encounter batches and keeping the question union lean.",
+      "Letting the LLM set combat numbers (HP/damage/XP) would make balance unpredictable and exploitable; the design deliberately computes these deterministically in the backend — if a future contributor moves tuning into the LLM schema, game balance and difficulty will regress.",
+      "Source-grounding fields (sourceQuote/sourceChunkIds) are only as trustworthy as your retrieval+prompt; the LLM can fabricate quotes. Add a guardrail that verifies sourceQuote is a substring (fuzzy) of the referenced chunk, and flag/reject items that fail — this is also a strong eval to showcase.",
+      "short_answer auto-grading via acceptedAnswers[] is brittle for free-text; either restrict short_answer to fill-in-the-blank with tightly-bounded answers, or add an LLM-judge grading path (extra cost) — document the tradeoff to avoid frustrating wrong-answer penalties in combat.",
+      "Deep model/pricing volatility: model names (gpt-5.4-mini) and prices verified for June 2026 but change frequently (gpt-5.5 doubled prices on 2026-04-23); re-verify against the OpenAI pricing page before committing budget, and keep the model id in config, not hardcoded.",
+      "schemaVersion is included but must actually be enforced with a migration strategy; without it, evolving the question taxonomy will break previously generated/stored games in the LMS dashboard.",
+      "ordering/matching are harder for the client to render and grade than MC/TF; if demo time is tight, ship MC + multi_select + true_false first (highest generation reliability) and gate ordering/matching behind validation maturity."
+    ]
+  }
+]
