@@ -87,3 +87,94 @@ def test_teacher_upload_generate_fetch(monkeypatch, tmp_path):
         assert client.get("/teacher/campaigns/nope").status_code == 404
     finally:
         app.dependency_overrides.clear()
+
+
+def _seed_game() -> dict:
+    return {
+        "schemaVersion": "1.0.0", "campaignId": "c1", "title": "T", "description": "d",
+        "sourceDocumentId": "doc",
+        "combatConfig": {
+            "playerStartingHp": 100, "baseDamagePerCorrect": 10,
+            "streakMultipliers": [1.0, 1.25, 1.5, 2.0], "wrongAnswerHpCost": 8,
+            "xpPerCorrectByDifficulty": {"easy": 10, "medium": 20, "hard": 35},
+            "levelXpCurve": [0, 100, 250, 450, 700],
+        },
+        "acts": [{
+            "actId": "a1", "order": 1, "title": "Act", "syllabusTopic": "x", "summary": "s",
+            "encounters": [{
+                "encounterId": "e1", "order": 1, "kind": "boss", "title": "Boss",
+                "enemyName": "E", "enemyFlavor": "f", "subTopic": "x",
+                "combat": {"enemyMaxHp": 30, "enemyBaseDamage": 8, "kindHpMultiplier": 2.0},
+                "rewards": [],
+                "questions": [
+                    {"questionId": "q1", "questionType": "multiple_choice", "bloomLevel": "remember",
+                     "difficulty": "easy", "prompt": "?", "sourceChunkIds": ["c"],
+                     "sourceQuote": "sky is blue", "sourcePage": None, "explanation": "blue",
+                     "hint": None, "options": [{"optionId": "a", "text": "blue"},
+                     {"optionId": "b", "text": "red"}], "correctOptionIds": ["a"],
+                     "correctBoolean": None, "acceptedAnswers": None, "caseSensitive": None,
+                     "orderedItems": None, "matchPairs": None},
+                    {"questionId": "q2", "questionType": "true_false", "bloomLevel": "remember",
+                     "difficulty": "easy", "prompt": "?", "sourceChunkIds": ["c"], "sourceQuote": "x",
+                     "sourcePage": None, "explanation": "e", "hint": None, "options": None,
+                     "correctOptionIds": None, "correctBoolean": True, "acceptedAnswers": None,
+                     "caseSensitive": None, "orderedItems": None, "matchPairs": None},
+                ],
+            }],
+        }],
+    }
+
+
+def test_student_play_flow(tmp_path):
+    from app.core.security import CurrentUser, get_current_user
+    from app.models.tables import Campaign, CampaignStatus, User, UserRole
+
+    engine = create_engine(
+        f"sqlite:///{tmp_path / 'play.db'}", connect_args={"check_same_thread": False}
+    )
+    SQLModel.metadata.create_all(engine)
+    game = _seed_game()
+    with Session(engine) as s:
+        s.add(User(id="stud1", email="s@x", role=UserRole.student, display_name="s",
+                   auth_provider_id="stud1"))
+        s.add(Campaign(id="camp1", document_id="docX", teacher_id="t1", title="T",
+                       status=CampaignStatus.ready, game_json=game,
+                       combat_config=game["combatConfig"], schema_version="1.0.0"))
+        s.commit()
+
+    def _override():
+        with Session(engine) as session:
+            yield session
+
+    app.dependency_overrides[get_session] = _override
+    app.dependency_overrides[get_current_user] = lambda: CurrentUser(
+        sub="stud1", email="s@x", role="student"
+    )
+    try:
+        client = TestClient(app)
+        r = client.post("/student/play/camp1/start")
+        assert r.status_code == 200, r.text
+        sid = r.json()["session_id"]
+        # game is redacted — no answer fields leaked to the client
+        q0 = r.json()["game"]["acts"][0]["encounters"][0]["questions"][0]
+        assert "correctOptionIds" not in q0 and "explanation" not in q0
+
+        # correct MCQ → 10 damage, streak 1
+        r1 = client.post(f"/student/play/{sid}/answer",
+                         json={"encounter_id": "e1", "question_id": "q1", "answer": "a"})
+        assert r1.status_code == 200, r1.text
+        assert r1.json()["isCorrect"] is True
+        assert r1.json()["damage"] == 10 and r1.json()["streak"] == 1
+
+        # wrong T/F → streak resets, HP drops by 8
+        r2 = client.post(f"/student/play/{sid}/answer",
+                         json={"encounter_id": "e1", "question_id": "q2", "answer": False})
+        assert r2.json()["isCorrect"] is False
+        assert r2.json()["streak"] == 0 and r2.json()["hp"] == 92
+
+        # finish → completed, score persisted
+        r3 = client.post(f"/student/play/{sid}/finish")
+        assert r3.status_code == 200
+        assert r3.json()["status"] == "completed" and r3.json()["score"] == 10
+    finally:
+        app.dependency_overrides.clear()

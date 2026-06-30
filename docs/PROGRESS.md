@@ -2,7 +2,14 @@
 
 Small, committed increments so work survives a mid-session cutoff. Tick items as they land; each ticked item = a commit.
 
-## Current: M1.2 — RAG context + Docling ingestion
+## Current: M2 — play one game (student client)
+
+- [x] **T1. Student play API + scoring (backend)** — DONE. `services/scoring.py` (redact_game, check_answer for all 6 types, streak/damage/XP/level); `routers/student.py` endpoints `POST /student/play/{campaign_id}/start` (returns redacted game + combatConfig + session), `/play/{session_id}/answer` (server-checks, persists `QuestionAttempt`, returns verdict + HP/streak/XP/score + explanation/citation), `/play/{session_id}/finish`. `PlaySession.campaign_id` added (nullable). 20 tests pass incl. a full play-flow API test.
+- [ ] **T2. Combat engine (shared/client)** — pure TS domain (apply-answer / streak / HP / XP) in packages/shared; Zustand store + XState combat machine in apps/student.
+- [ ] **T3. Combat UI (student app)** — React+Tailwind+Motion: boss + HP bars, question card (MCQ/multi/TF), streak/damage animations, rewards, win/lose, progress; wired to the play API.
+- [ ] **T4. Verify** — play a seeded game end-to-end; scoring/persistence correct; scoring unit tests + a play-flow API test.
+
+## Done: M1.2 — RAG context + Docling ingestion
 
 - [x] **T1. Ingestion parser decision** — DONE. Docling installs & extracts real headings (57 on the PDF), BUT its preprocess stage OOMs (`std::bad_alloc`) on ~20 of ~80 pages on this 16GB/no-GPU box and silently drops them (only 6k of 30k tokens survived). MarkItDown extracts the full 30,267 tokens reliably (no headings). **Default = `markitdown`**; config `ingestion_parser` = markitdown | docling | auto (auto = Docling then MarkItDown fallback on partial). Docling viable only on bigger hardware or small docs → RAG context (T2/T3) is what makes the structureless MarkItDown output work well.
 - [x] **T2. Embed + store chunks on ingestion** — DONE. `embeddings.embed_texts_with_usage`; the upload endpoint chunks + embeds + persists `Chunk` rows (best-effort — stores text without vectors if embedding fails). Verified via stubbed API test.

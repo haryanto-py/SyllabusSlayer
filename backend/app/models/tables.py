@@ -137,7 +137,9 @@ class Assignment(SQLModel, table=True):
 class PlaySession(SQLModel, table=True):
     __tablename__ = "play_sessions"
     id: str = Field(default_factory=_uuid, primary_key=True)
-    assignment_id: str = Field(foreign_key="assignments.id", index=True)
+    # M2 plays a campaign directly; M3 will link an assignment. Both nullable for now.
+    assignment_id: str | None = Field(default=None, foreign_key="assignments.id", index=True)
+    campaign_id: str | None = Field(default=None, foreign_key="campaigns.id", index=True)
     student_id: str = Field(foreign_key="users.id", index=True)
     status: SessionStatus = Field(default=SessionStatus.in_progress)
     started_at: datetime = Field(default_factory=_now)

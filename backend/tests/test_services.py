@@ -209,6 +209,57 @@ def test_summarize_for_outline_maps_each_window(monkeypatch):
     assert len(usages) >= 2
 
 
+# --- scoring (M2) ----------------------------------------------------------- #
+def _mcq_q(qid: str = "q1", correct: str = "a") -> dict:
+    return {
+        "questionId": qid,
+        "questionType": "multiple_choice",
+        "difficulty": "medium",
+        "options": [{"optionId": "a", "text": "A"}, {"optionId": "b", "text": "B"}],
+        "correctOptionIds": [correct],
+        "explanation": "because",
+        "sourceQuote": "A is right",
+        "orderedItems": None,
+        "matchPairs": None,
+    }
+
+
+def test_scoring_check_answer_types():
+    from app.services import scoring
+
+    assert scoring.check_answer(_mcq_q(), "a")[0] is True
+    assert scoring.check_answer(_mcq_q(), "b")[0] is False
+    tf = {"questionType": "true_false", "correctBoolean": True}
+    assert scoring.check_answer(tf, True)[0] is True
+    assert scoring.check_answer(tf, False)[0] is False
+    sa = {"questionType": "short_answer", "acceptedAnswers": ["ATP"], "caseSensitive": False}
+    assert scoring.check_answer(sa, " atp ")[0] is True
+
+
+def test_scoring_streak_and_damage():
+    from app.schemas.game import CombatConfig
+    from app.services import scoring
+
+    cfg = CombatConfig()  # base 10, multipliers [1.0, 1.25, 1.5, 2.0]
+    r1 = scoring.score_answer(_mcq_q(), "a", prev_streak=0, cfg=cfg)
+    assert r1["is_correct"] and r1["new_streak"] == 1 and r1["damage"] == 10
+    r2 = scoring.score_answer(_mcq_q(), "a", prev_streak=1, cfg=cfg)
+    assert r2["damage"] == round(10 * 1.25)  # streak 2 -> 1.25x
+    wrong = scoring.score_answer(_mcq_q(), "b", prev_streak=3, cfg=cfg)
+    assert not wrong["is_correct"] and wrong["new_streak"] == 0
+    assert wrong["hp_cost"] == cfg.wrongAnswerHpCost
+
+
+def test_scoring_redact_removes_answers():
+    from app.services import scoring
+
+    game = {"acts": [{"encounters": [{"questions": [_mcq_q()]}]}]}
+    q = scoring.redact_game(game)["acts"][0]["encounters"][0]["questions"][0]
+    assert "correctOptionIds" not in q
+    assert "explanation" not in q
+    assert q["options"]  # options still present to render
+
+
 # --- schema validator ------------------------------------------------------- #
 def test_question_validator_rejects_bad_mcq():
     with pytest.raises(ValidationError):
