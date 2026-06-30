@@ -1,0 +1,870 @@
+{
+  "schemaVersion": "1.0.0",
+  "campaignId": "cell-biology-basics-roguelike-quiz-rpg",
+  "title": "Cell Biology: The Organelle Wars",
+  "description": "A roguelike quiz-RPG campaign where each act is a core topic in cell biology. Players face membrane, nucleus, and mitochondria guardians, then descend through the stages of cellular respiration\u2014ending in the act boss at the electron transport chain.",
+  "sourceDocumentId": "doc_cell_biology",
+  "combatConfig": {
+    "playerStartingHp": 100,
+    "baseDamagePerCorrect": 10,
+    "streakMultipliers": [
+      1.0,
+      1.25,
+      1.5,
+      2.0
+    ],
+    "wrongAnswerHpCost": 8,
+    "xpPerCorrectByDifficulty": {
+      "easy": 10,
+      "medium": 20,
+      "hard": 35
+    },
+    "levelXpCurve": [
+      0,
+      100,
+      250,
+      450,
+      700
+    ]
+  },
+  "acts": [
+    {
+      "actId": "act-cell-organelles",
+      "order": 1,
+      "title": "Act I: The Cell & Its Organelles",
+      "syllabusTopic": "The Cell and Its Organelles",
+      "summary": "Explore the cell membrane\u2019s selective permeability, the nucleus as the DNA command center, and mitochondria as ATP-producing powerhouses.",
+      "encounters": [
+        {
+          "encounterId": "enc-cell-membrane-gates",
+          "order": 1,
+          "kind": "minion",
+          "title": "The Selective Gatehouse",
+          "enemyName": "Phospholipid Gatewraiths",
+          "enemyFlavor": "A living bilayer of phospholipids and misbehaving gate proteins\u2014channels and pumps that refuse unauthorized travelers.",
+          "subTopic": "The Cell Membrane (phospholipid bilayer, selective permeability, channels and pumps)",
+          "combat": {
+            "enemyMaxHp": 26,
+            "enemyBaseDamage": 8,
+            "kindHpMultiplier": 1.0
+          },
+          "rewards": [],
+          "questions": [
+            {
+              "questionId": "enc-cell-membrane-gates-q1",
+              "questionType": "multiple_choice",
+              "bloomLevel": "remember",
+              "difficulty": "easy",
+              "prompt": "What structure surrounds the cell in the source text?",
+              "sourceChunkIds": [
+                "doc_cell_biology::enc-cell-membrane-gates"
+              ],
+              "sourceQuote": "The cell membrane is a phospholipid bilayer that surrounds the cell.",
+              "sourcePage": null,
+              "explanation": "The source directly states that the cell membrane is the phospholipid bilayer surrounding the cell.",
+              "hint": null,
+              "options": [
+                {
+                  "optionId": "A",
+                  "text": "A phospholipid bilayer"
+                },
+                {
+                  "optionId": "B",
+                  "text": "A rigid cell wall"
+                },
+                {
+                  "optionId": "C",
+                  "text": "A nucleus envelope"
+                },
+                {
+                  "optionId": "D",
+                  "text": "A protein shell"
+                }
+              ],
+              "correctOptionIds": [
+                "A"
+              ],
+              "correctBoolean": null,
+              "acceptedAnswers": null,
+              "caseSensitive": null,
+              "orderedItems": null,
+              "matchPairs": null
+            },
+            {
+              "questionId": "enc-cell-membrane-gates-q2",
+              "questionType": "true_false",
+              "bloomLevel": "understand",
+              "difficulty": "easy",
+              "prompt": "The cell membrane is selectively permeable, meaning it controls what enters and leaves the cell.",
+              "sourceChunkIds": [
+                "doc_cell_biology::enc-cell-membrane-gates"
+              ],
+              "sourceQuote": "It is selectively permeable, controlling which substances enter and leave the cell.",
+              "sourcePage": null,
+              "explanation": "This is true because the source says the membrane controls which substances enter and leave the cell.",
+              "hint": null,
+              "options": null,
+              "correctOptionIds": null,
+              "correctBoolean": true,
+              "acceptedAnswers": null,
+              "caseSensitive": null,
+              "orderedItems": null,
+              "matchPairs": null
+            },
+            {
+              "questionId": "enc-cell-membrane-gates-q3",
+              "questionType": "multiple_choice",
+              "bloomLevel": "apply",
+              "difficulty": "medium",
+              "prompt": "According to the source, what do embedded proteins do in the cell membrane?",
+              "sourceChunkIds": [
+                "doc_cell_biology::enc-cell-membrane-gates"
+              ],
+              "sourceQuote": "Embedded proteins act as channels and pumps",
+              "sourcePage": null,
+              "explanation": "The source says embedded proteins function as channels and pumps that move ions and molecules across the membrane.",
+              "hint": null,
+              "options": [
+                {
+                  "optionId": "A",
+                  "text": "They act as channels and pumps"
+                },
+                {
+                  "optionId": "B",
+                  "text": "They make the membrane a rigid wall"
+                },
+                {
+                  "optionId": "C",
+                  "text": "They store genetic information"
+                },
+                {
+                  "optionId": "D",
+                  "text": "They produce the phospholipid bilayer"
+                }
+              ],
+              "correctOptionIds": [
+                "A"
+              ],
+              "correctBoolean": null,
+              "acceptedAnswers": null,
+              "caseSensitive": null,
+              "orderedItems": null,
+              "matchPairs": null
+            }
+          ]
+        },
+        {
+          "encounterId": "enc-nucleus-dna-wardens",
+          "order": 2,
+          "kind": "elite",
+          "title": "Nuclear Pore Trial",
+          "enemyName": "Nuclear Pore Wardens",
+          "enemyFlavor": "Double-membraned guardians guarding DNA secrets, only allowing regulated passage between nucleus and cytoplasm.",
+          "subTopic": "The Nucleus (DNA storage, nuclear envelope, nuclear pores regulating movement)",
+          "combat": {
+            "enemyMaxHp": 39,
+            "enemyBaseDamage": 8,
+            "kindHpMultiplier": 1.5
+          },
+          "rewards": [
+            {
+              "rewardId": "powerup_insight",
+              "kind": "powerup",
+              "name": "Flash of Insight",
+              "description": "Reveal one wrong answer once per encounter.",
+              "magnitude": 1
+            }
+          ],
+          "questions": [
+            {
+              "questionId": "enc-nucleus-dna-wardens-q1",
+              "questionType": "multiple_choice",
+              "bloomLevel": "remember",
+              "difficulty": "easy",
+              "prompt": "What does the nucleus store in the cell?",
+              "sourceChunkIds": [
+                "doc_cell_biology::enc-nucleus-dna-wardens"
+              ],
+              "sourceQuote": "stores the cell's genetic material as DNA",
+              "sourcePage": null,
+              "explanation": "The source states that the nucleus stores the cell's genetic material as DNA.",
+              "hint": null,
+              "options": [
+                {
+                  "optionId": "A",
+                  "text": "The cell's genetic material as DNA"
+                },
+                {
+                  "optionId": "B",
+                  "text": "Proteins for energy production"
+                },
+                {
+                  "optionId": "C",
+                  "text": "Water and salts for balance"
+                },
+                {
+                  "optionId": "D",
+                  "text": "Cell wall fibers"
+                }
+              ],
+              "correctOptionIds": [
+                "A"
+              ],
+              "correctBoolean": null,
+              "acceptedAnswers": null,
+              "caseSensitive": null,
+              "orderedItems": null,
+              "matchPairs": null
+            },
+            {
+              "questionId": "enc-nucleus-dna-wardens-q2",
+              "questionType": "true_false",
+              "bloomLevel": "understand",
+              "difficulty": "easy",
+              "prompt": "The nuclear envelope is a double membrane surrounding the nucleus.",
+              "sourceChunkIds": [
+                "doc_cell_biology::enc-nucleus-dna-wardens"
+              ],
+              "sourceQuote": "It is enclosed by the nuclear envelope, a double membrane",
+              "sourcePage": null,
+              "explanation": "The source explicitly describes the nuclear envelope as a double membrane enclosing the nucleus.",
+              "hint": null,
+              "options": null,
+              "correctOptionIds": null,
+              "correctBoolean": true,
+              "acceptedAnswers": null,
+              "caseSensitive": null,
+              "orderedItems": null,
+              "matchPairs": null
+            },
+            {
+              "questionId": "enc-nucleus-dna-wardens-q3",
+              "questionType": "multiple_choice",
+              "bloomLevel": "apply",
+              "difficulty": "medium",
+              "prompt": "What is the role of the nuclear pores mentioned in the passage?",
+              "sourceChunkIds": [
+                "doc_cell_biology::enc-nucleus-dna-wardens"
+              ],
+              "sourceQuote": "nuclear pores that regulate the movement of molecules between the nucleus and the cytoplasm",
+              "sourcePage": null,
+              "explanation": "The passage says nuclear pores regulate movement of molecules between the nucleus and the cytoplasm.",
+              "hint": null,
+              "options": [
+                {
+                  "optionId": "A",
+                  "text": "They regulate the movement of molecules between the nucleus and the cytoplasm"
+                },
+                {
+                  "optionId": "B",
+                  "text": "They break down DNA inside the nucleus"
+                },
+                {
+                  "optionId": "C",
+                  "text": "They produce the cell's genetic material"
+                },
+                {
+                  "optionId": "D",
+                  "text": "They form the outer layer of the cell"
+                }
+              ],
+              "correctOptionIds": [
+                "A"
+              ],
+              "correctBoolean": null,
+              "acceptedAnswers": null,
+              "caseSensitive": null,
+              "orderedItems": null,
+              "matchPairs": null
+            }
+          ]
+        },
+        {
+          "encounterId": "enc-mitochondria-cristae-bossroom",
+          "order": 3,
+          "kind": "boss",
+          "title": "Cristae of the Powerhouse",
+          "enemyName": "Cristae Tyrant, the ATP-Spark",
+          "enemyFlavor": "A brutal mitochondrial warlord: inner membrane folded into cristae, fueling aerobic respiration and demanding the truth of ATP production.",
+          "subTopic": "Mitochondria (ATP production via aerobic respiration; inner membrane cristae; oxidative phosphorylation surface area)",
+          "combat": {
+            "enemyMaxHp": 72,
+            "enemyBaseDamage": 8,
+            "kindHpMultiplier": 2.0
+          },
+          "rewards": [
+            {
+              "rewardId": "relic_focus",
+              "kind": "relic",
+              "name": "Scholar's Focus",
+              "description": "+25% damage while your streak is 3 or higher.",
+              "magnitude": 25
+            }
+          ],
+          "questions": [
+            {
+              "questionId": "enc-mitochondria-cristae-bossroom-q1",
+              "questionType": "multiple_choice",
+              "bloomLevel": "remember",
+              "difficulty": "easy",
+              "prompt": "What is the main site of ATP production through aerobic respiration in the cell?",
+              "sourceChunkIds": [
+                "doc_cell_biology::enc-mitochondria-cristae-bossroom"
+              ],
+              "sourceQuote": "Mitochondria are the site of ATP production through aerobic respiration.",
+              "sourcePage": null,
+              "explanation": "The source directly states that mitochondria are where ATP is produced through aerobic respiration.",
+              "hint": null,
+              "options": [
+                {
+                  "optionId": "A",
+                  "text": "Mitochondria"
+                },
+                {
+                  "optionId": "B",
+                  "text": "Ribosomes"
+                },
+                {
+                  "optionId": "C",
+                  "text": "Nucleus"
+                },
+                {
+                  "optionId": "D",
+                  "text": "Golgi apparatus"
+                }
+              ],
+              "correctOptionIds": [
+                "A"
+              ],
+              "correctBoolean": null,
+              "acceptedAnswers": null,
+              "caseSensitive": null,
+              "orderedItems": null,
+              "matchPairs": null
+            },
+            {
+              "questionId": "enc-mitochondria-cristae-bossroom-q2",
+              "questionType": "true_false",
+              "bloomLevel": "understand",
+              "difficulty": "easy",
+              "prompt": "Mitochondria are often called the powerhouse of the cell.",
+              "sourceChunkIds": [
+                "doc_cell_biology::enc-mitochondria-cristae-bossroom"
+              ],
+              "sourceQuote": "Often called the powerhouse of the cell",
+              "sourcePage": null,
+              "explanation": "The passage explicitly says mitochondria are often called the powerhouse of the cell.",
+              "hint": null,
+              "options": null,
+              "correctOptionIds": null,
+              "correctBoolean": true,
+              "acceptedAnswers": null,
+              "caseSensitive": null,
+              "orderedItems": null,
+              "matchPairs": null
+            },
+            {
+              "questionId": "enc-mitochondria-cristae-bossroom-q3",
+              "questionType": "multiple_choice",
+              "bloomLevel": "remember",
+              "difficulty": "medium",
+              "prompt": "What is the inner membrane of mitochondria folded into?",
+              "sourceChunkIds": [
+                "doc_cell_biology::enc-mitochondria-cristae-bossroom"
+              ],
+              "sourceQuote": "their inner membrane folded into cristae",
+              "sourcePage": null,
+              "explanation": "The source says the inner membrane is folded into cristae.",
+              "hint": null,
+              "options": [
+                {
+                  "optionId": "A",
+                  "text": "Cristae"
+                },
+                {
+                  "optionId": "B",
+                  "text": "Thylakoids"
+                },
+                {
+                  "optionId": "C",
+                  "text": "Villi"
+                },
+                {
+                  "optionId": "D",
+                  "text": "Cisternae"
+                }
+              ],
+              "correctOptionIds": [
+                "A"
+              ],
+              "correctBoolean": null,
+              "acceptedAnswers": null,
+              "caseSensitive": null,
+              "orderedItems": null,
+              "matchPairs": null
+            },
+            {
+              "questionId": "enc-mitochondria-cristae-bossroom-q4",
+              "questionType": "multiple_choice",
+              "bloomLevel": "apply",
+              "difficulty": "medium",
+              "prompt": "Why do cristae help mitochondria perform oxidative phosphorylation more effectively?",
+              "sourceChunkIds": [
+                "doc_cell_biology::enc-mitochondria-cristae-bossroom"
+              ],
+              "sourceQuote": "increase the surface area for the reactions of oxidative phosphorylation",
+              "sourcePage": null,
+              "explanation": "Cristae increase the membrane surface area available for oxidative phosphorylation reactions, which supports ATP production.",
+              "hint": null,
+              "options": [
+                {
+                  "optionId": "A",
+                  "text": "They increase the surface area for the reactions of oxidative phosphorylation."
+                },
+                {
+                  "optionId": "B",
+                  "text": "They store DNA for making proteins."
+                },
+                {
+                  "optionId": "C",
+                  "text": "They break down glucose in the cytoplasm."
+                },
+                {
+                  "optionId": "D",
+                  "text": "They prevent the cell from using oxygen."
+                }
+              ],
+              "correctOptionIds": [
+                "A"
+              ],
+              "correctBoolean": null,
+              "acceptedAnswers": null,
+              "caseSensitive": null,
+              "orderedItems": null,
+              "matchPairs": null
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "actId": "act-cellular-respiration",
+      "order": 2,
+      "title": "Act II: Cellular Respiration",
+      "syllabusTopic": "Cellular Respiration",
+      "summary": "Run the glucose-to-pyruvate opening scramble, follow energy handoffs through the Krebs cycle, then face the final proton-pumping showdown at the electron transport chain.",
+      "encounters": [
+        {
+          "encounterId": "enc-glycolysis-pyruvate-factory",
+          "order": 1,
+          "kind": "minion",
+          "title": "Glycolysis Breakout",
+          "enemyName": "Pyruvate Split-Swindlers",
+          "enemyFlavor": "Cytoplasmic saboteurs that slice one glucose into two pyruvate\u2014promising a small net ATP gain and laughing at oxygen requirements.",
+          "subTopic": "Glycolysis (cytoplasm; glucose \u2192 two pyruvate; small net gain of two ATP; does not require oxygen)",
+          "combat": {
+            "enemyMaxHp": 24,
+            "enemyBaseDamage": 8,
+            "kindHpMultiplier": 1.0
+          },
+          "rewards": [],
+          "questions": [
+            {
+              "questionId": "enc-glycolysis-pyruvate-factory-q1",
+              "questionType": "multiple_choice",
+              "bloomLevel": "remember",
+              "difficulty": "easy",
+              "prompt": "Where does glycolysis occur?",
+              "sourceChunkIds": [
+                "doc_cell_biology::enc-glycolysis-pyruvate-factory"
+              ],
+              "sourceQuote": "Glycolysis occurs in the cytoplasm",
+              "sourcePage": null,
+              "explanation": "The source explicitly says glycolysis occurs in the cytoplasm.",
+              "hint": null,
+              "options": [
+                {
+                  "optionId": "A",
+                  "text": "In the cytoplasm"
+                },
+                {
+                  "optionId": "B",
+                  "text": "In the nucleus"
+                },
+                {
+                  "optionId": "C",
+                  "text": "In the mitochondria"
+                },
+                {
+                  "optionId": "D",
+                  "text": "Outside the cell"
+                }
+              ],
+              "correctOptionIds": [
+                "A"
+              ],
+              "correctBoolean": null,
+              "acceptedAnswers": null,
+              "caseSensitive": null,
+              "orderedItems": null,
+              "matchPairs": null
+            },
+            {
+              "questionId": "enc-glycolysis-pyruvate-factory-q2",
+              "questionType": "multiple_choice",
+              "bloomLevel": "understand",
+              "difficulty": "easy",
+              "prompt": "What is one molecule of glucose converted into during glycolysis?",
+              "sourceChunkIds": [
+                "doc_cell_biology::enc-glycolysis-pyruvate-factory"
+              ],
+              "sourceQuote": "breaks one molecule of glucose into two molecules of pyruvate",
+              "sourcePage": null,
+              "explanation": "The passage states that one glucose molecule is broken into two pyruvate molecules.",
+              "hint": null,
+              "options": [
+                {
+                  "optionId": "A",
+                  "text": "Two molecules of pyruvate"
+                },
+                {
+                  "optionId": "B",
+                  "text": "One molecule of lactate"
+                },
+                {
+                  "optionId": "C",
+                  "text": "Two molecules of oxygen"
+                },
+                {
+                  "optionId": "D",
+                  "text": "One molecule of ATP"
+                }
+              ],
+              "correctOptionIds": [
+                "A"
+              ],
+              "correctBoolean": null,
+              "acceptedAnswers": null,
+              "caseSensitive": null,
+              "orderedItems": null,
+              "matchPairs": null
+            },
+            {
+              "questionId": "enc-glycolysis-pyruvate-factory-q3",
+              "questionType": "true_false",
+              "bloomLevel": "remember",
+              "difficulty": "easy",
+              "prompt": "Glycolysis requires oxygen to occur.",
+              "sourceChunkIds": [
+                "doc_cell_biology::enc-glycolysis-pyruvate-factory"
+              ],
+              "sourceQuote": "does not require oxygen",
+              "sourcePage": null,
+              "explanation": "The source says glycolysis does not require oxygen, so the statement is false.",
+              "hint": null,
+              "options": null,
+              "correctOptionIds": null,
+              "correctBoolean": false,
+              "acceptedAnswers": null,
+              "caseSensitive": null,
+              "orderedItems": null,
+              "matchPairs": null
+            }
+          ]
+        },
+        {
+          "encounterId": "enc-krebs-matrix-energy-ritual",
+          "order": 2,
+          "kind": "elite",
+          "title": "Krebs Cycle: The Matrix Ritual",
+          "enemyName": "NADH & FADH2 Alchemists",
+          "enemyFlavor": "Mitochondrial matrix mystics that oxidize pyruvate-derived molecules, release carbon dioxide, and harvest energy into electron carriers.",
+          "subTopic": "The Krebs Cycle (mitochondrial matrix; oxidizes pyruvate-derived molecules; releases CO2; transfers energy to NADH and FADH2)",
+          "combat": {
+            "enemyMaxHp": 39,
+            "enemyBaseDamage": 8,
+            "kindHpMultiplier": 1.5
+          },
+          "rewards": [
+            {
+              "rewardId": "powerup_insight",
+              "kind": "powerup",
+              "name": "Flash of Insight",
+              "description": "Reveal one wrong answer once per encounter.",
+              "magnitude": 1
+            }
+          ],
+          "questions": [
+            {
+              "questionId": "enc-krebs-matrix-energy-ritual-q1",
+              "questionType": "multiple_choice",
+              "bloomLevel": "remember",
+              "difficulty": "easy",
+              "prompt": "According to the source, what are mitochondria the site of?",
+              "sourceChunkIds": [
+                "doc_cell_biology::enc-krebs-matrix-energy-ritual"
+              ],
+              "sourceQuote": "Mitochondria are the site of ATP production",
+              "sourcePage": null,
+              "explanation": "The source directly states that mitochondria are the site of ATP production through aerobic respiration.",
+              "hint": null,
+              "options": [
+                {
+                  "optionId": "a",
+                  "text": "ATP production through aerobic respiration"
+                },
+                {
+                  "optionId": "b",
+                  "text": "DNA replication in the nucleus"
+                },
+                {
+                  "optionId": "c",
+                  "text": "Protein digestion in lysosomes"
+                },
+                {
+                  "optionId": "d",
+                  "text": "Light capture for photosynthesis"
+                }
+              ],
+              "correctOptionIds": [
+                "a"
+              ],
+              "correctBoolean": null,
+              "acceptedAnswers": null,
+              "caseSensitive": null,
+              "orderedItems": null,
+              "matchPairs": null
+            },
+            {
+              "questionId": "enc-krebs-matrix-energy-ritual-q2",
+              "questionType": "true_false",
+              "bloomLevel": "understand",
+              "difficulty": "easy",
+              "prompt": "The inner membrane of mitochondria is folded into cristae that increase surface area.",
+              "sourceChunkIds": [
+                "doc_cell_biology::enc-krebs-matrix-energy-ritual"
+              ],
+              "sourceQuote": "their inner membrane folded into cristae that increase the surface area",
+              "sourcePage": null,
+              "explanation": "This is true because the source says the inner membrane is folded into cristae to increase surface area.",
+              "hint": null,
+              "options": null,
+              "correctOptionIds": null,
+              "correctBoolean": true,
+              "acceptedAnswers": null,
+              "caseSensitive": null,
+              "orderedItems": null,
+              "matchPairs": null
+            },
+            {
+              "questionId": "enc-krebs-matrix-energy-ritual-q3",
+              "questionType": "multiple_choice",
+              "bloomLevel": "apply",
+              "difficulty": "medium",
+              "prompt": "Which feature described in the source would most directly help provide more surface area for oxidative phosphorylation reactions?",
+              "sourceChunkIds": [
+                "doc_cell_biology::enc-krebs-matrix-energy-ritual"
+              ],
+              "sourceQuote": "folded into cristae that increase the surface area for the reactions of oxidative phosphorylation",
+              "sourcePage": null,
+              "explanation": "The folded cristae increase membrane surface area, which the source links to the reactions of oxidative phosphorylation.",
+              "hint": null,
+              "options": [
+                {
+                  "optionId": "a",
+                  "text": "The inner membrane folded into cristae"
+                },
+                {
+                  "optionId": "b",
+                  "text": "The mitochondrion being called the powerhouse of the cell"
+                },
+                {
+                  "optionId": "c",
+                  "text": "The mitochondrion being part of aerobic respiration"
+                },
+                {
+                  "optionId": "d",
+                  "text": "The production of ATP in the cell"
+                }
+              ],
+              "correctOptionIds": [
+                "a"
+              ],
+              "correctBoolean": null,
+              "acceptedAnswers": null,
+              "caseSensitive": null,
+              "orderedItems": null,
+              "matchPairs": null
+            }
+          ]
+        },
+        {
+          "encounterId": "enc-electron-transport-chain-final-boss",
+          "order": 3,
+          "kind": "boss",
+          "title": "The Inner Membrane\u2019s Final Line",
+          "enemyName": "Proton-Gradient Overlord",
+          "enemyFlavor": "A chain of destiny on the inner mitochondrial membrane\u2014pumping protons, fueling ATP synthase, and demanding oxygen as the final acceptor.",
+          "subTopic": "The Electron Transport Chain (inner mitochondrial membrane; proton pumping; ATP synthase; oxygen as final electron acceptor)",
+          "combat": {
+            "enemyMaxHp": 68,
+            "enemyBaseDamage": 8,
+            "kindHpMultiplier": 2.0
+          },
+          "rewards": [
+            {
+              "rewardId": "relic_focus",
+              "kind": "relic",
+              "name": "Scholar's Focus",
+              "description": "+25% damage while your streak is 3 or higher.",
+              "magnitude": 25
+            }
+          ],
+          "questions": [
+            {
+              "questionId": "q1",
+              "questionType": "multiple_choice",
+              "bloomLevel": "remember",
+              "difficulty": "easy",
+              "prompt": "According to the source, mitochondria are the site of what process for ATP production?",
+              "sourceChunkIds": [
+                "doc_cell_biology::enc-electron-transport-chain-final-boss"
+              ],
+              "sourceQuote": "Mitochondria are the site of ATP production through aerobic respiration.",
+              "sourcePage": null,
+              "explanation": "The source directly states that mitochondria are the site of ATP production through aerobic respiration.",
+              "hint": null,
+              "options": [
+                {
+                  "optionId": "A",
+                  "text": "ATP production through aerobic respiration"
+                },
+                {
+                  "optionId": "B",
+                  "text": "Protein synthesis through translation"
+                },
+                {
+                  "optionId": "C",
+                  "text": "DNA replication in the nucleus"
+                },
+                {
+                  "optionId": "D",
+                  "text": "Lipid storage in the cytoplasm"
+                }
+              ],
+              "correctOptionIds": [
+                "A"
+              ],
+              "correctBoolean": null,
+              "acceptedAnswers": null,
+              "caseSensitive": null,
+              "orderedItems": null,
+              "matchPairs": null
+            },
+            {
+              "questionId": "q2",
+              "questionType": "true_false",
+              "bloomLevel": "understand",
+              "difficulty": "easy",
+              "prompt": "True or false: Mitochondria are often called the powerhouse of the cell.",
+              "sourceChunkIds": [
+                "doc_cell_biology::enc-electron-transport-chain-final-boss"
+              ],
+              "sourceQuote": "Often called the powerhouse of the cell",
+              "sourcePage": null,
+              "explanation": "The source explicitly says mitochondria are often called the powerhouse of the cell.",
+              "hint": null,
+              "options": null,
+              "correctOptionIds": null,
+              "correctBoolean": true,
+              "acceptedAnswers": null,
+              "caseSensitive": null,
+              "orderedItems": null,
+              "matchPairs": null
+            },
+            {
+              "questionId": "q3",
+              "questionType": "multiple_choice",
+              "bloomLevel": "remember",
+              "difficulty": "easy",
+              "prompt": "What structure of the mitochondrion is folded into cristae?",
+              "sourceChunkIds": [
+                "doc_cell_biology::enc-electron-transport-chain-final-boss"
+              ],
+              "sourceQuote": "they have an inner membrane folded into cristae",
+              "sourcePage": null,
+              "explanation": "The source says the inner membrane is folded into cristae.",
+              "hint": null,
+              "options": [
+                {
+                  "optionId": "A",
+                  "text": "The inner membrane"
+                },
+                {
+                  "optionId": "B",
+                  "text": "The outer membrane"
+                },
+                {
+                  "optionId": "C",
+                  "text": "The nucleus"
+                },
+                {
+                  "optionId": "D",
+                  "text": "The cell wall"
+                }
+              ],
+              "correctOptionIds": [
+                "A"
+              ],
+              "correctBoolean": null,
+              "acceptedAnswers": null,
+              "caseSensitive": null,
+              "orderedItems": null,
+              "matchPairs": null
+            },
+            {
+              "questionId": "q4",
+              "questionType": "multiple_choice",
+              "bloomLevel": "understand",
+              "difficulty": "medium",
+              "prompt": "Why do the cristae of the inner mitochondrial membrane matter, according to the source?",
+              "sourceChunkIds": [
+                "doc_cell_biology::enc-electron-transport-chain-final-boss"
+              ],
+              "sourceQuote": "that increase the surface area for the reactions of oxidative phosphorylation",
+              "sourcePage": null,
+              "explanation": "The source explains that cristae increase surface area for the reactions of oxidative phosphorylation.",
+              "hint": null,
+              "options": [
+                {
+                  "optionId": "A",
+                  "text": "They increase the surface area for the reactions of oxidative phosphorylation"
+                },
+                {
+                  "optionId": "B",
+                  "text": "They store genetic information for the cell"
+                },
+                {
+                  "optionId": "C",
+                  "text": "They break down food in the digestive system"
+                },
+                {
+                  "optionId": "D",
+                  "text": "They prevent all cellular respiration from occurring"
+                }
+              ],
+              "correctOptionIds": [
+                "A"
+              ],
+              "correctBoolean": null,
+              "acceptedAnswers": null,
+              "caseSensitive": null,
+              "orderedItems": null,
+              "matchPairs": null
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -127,7 +127,7 @@ class Question(_SOModel):
     matchPairs: list[MatchPair] | None  # matching
 
     @model_validator(mode="after")
-    def _validate_cluster(self) -> "Question":
+    def _validate_cluster(self) -> Question:
         qt = self.questionType
         if qt in (QuestionType.multiple_choice, QuestionType.multi_select):
             if not self.options or not self.correctOptionIds:

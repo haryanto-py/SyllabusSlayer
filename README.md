@@ -66,7 +66,10 @@ Copy `apps/teacher/.env.local.example` and `apps/student/.env.local.example` →
 ## Status
 
 - ✅ **M0 — Scaffold:** npm-workspaces monorepo (separate teacher/student Next.js apps + shared package), backend skeleton with teacher/student RBAC routers, data model, game-content schema (Pydantic + Zod mirror), health endpoint. Both apps build; backend smoke-tested.
-- ⬜ **M1 — Ingestion + generation** · ⬜ **M2 — Play one game** · ⬜ **M3 — LMS + dashboard** · ⬜ **M4 — Polish + deploy**
+- ✅ **M1 — Ingestion + generation:** document ingestion (Docling/MarkItDown + markdown) → section tree, RAG-gate (tiktoken) + embeddings/cosine retrieval, OpenAI Structured-Outputs pipeline (`gpt-5.4-nano` outline + `gpt-5.4-mini` questions via Responses API), deterministic combat tuning, grounding/quality eval harness, and the teacher API (`/documents`, `/campaigns/generate`, `/campaigns/{id}`). **Verified live:** a 20-question cell-biology game, 100% source-grounded, ~$0.025/game; 12 tests pass. Sample output: [`docs/examples/cell_biology_game.json`](docs/examples/cell_biology_game.json).
+- ⬜ **M2 — Play one game** · ⬜ **M3 — LMS + dashboard** · ⬜ **M4 — Polish + deploy**
+
+Run the live pipeline: `cd backend && uv run python scripts/m1_demo.py` (needs `OPENAI_API_KEY` in the root `.env`, and `uv sync --extra ingestion` for PDF/DOCX/PPTX).
 
 See the roadmap in [`docs/BUILD-SPEC.md`](docs/BUILD-SPEC.md) §9.
 

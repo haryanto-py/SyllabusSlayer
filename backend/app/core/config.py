@@ -2,11 +2,22 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+_BACKEND_DIR = Path(__file__).resolve().parents[2]  # .../backend
+_REPO_ROOT = _BACKEND_DIR.parent  # repo root (holds the shared .env)
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+    # Load the shared repo-root .env first, then backend/.env (which, if present,
+    # overrides root). Real environment variables still take precedence over both.
+    model_config = SettingsConfigDict(
+        env_file=(str(_REPO_ROOT / ".env"), str(_BACKEND_DIR / ".env")),
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
 
     # --- environment ---
     env: str = "dev"  # dev | prod
@@ -33,8 +44,8 @@ class Settings(BaseSettings):
     # If a section's token count exceeds this, use retrieval; else direct long-context.
     rag_token_threshold: int = 100_000
 
-    # --- CORS ---
-    cors_origins: list[str] = ["http://localhost:3000"]
+    # --- CORS ---  (teacher app :3000, student app :3001)
+    cors_origins: list[str] = ["http://localhost:3000", "http://localhost:3001"]
 
 
 settings = Settings()

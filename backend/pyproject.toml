@@ -38,6 +38,19 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
+# UP042: `(str, Enum)` is intentional — it serializes cleanly with Pydantic + OpenAI
+# Structured Outputs; we don't want StrEnum's behavioural differences.
+ignore = ["UP042"]
+
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI's dependency-injection idiom puts Depends()/File()/etc. in argument defaults.
+extend-immutable-calls = ["fastapi.Depends", "fastapi.File", "fastapi.Query", "fastapi.Body", "fastapi.Form"]
+
+[tool.ruff.lint.per-file-ignores]
+# Long prompt/instruction string literals are clearer unwrapped.
+"app/services/generation.py" = ["E501"]
+# Tests favour readability over line length.
+"tests/*" = ["E501"]
 
 [build-system]
 requires = ["hatchling"]

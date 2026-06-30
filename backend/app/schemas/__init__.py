@@ -1,6 +1,7 @@
 """Pydantic schemas: API I/O and the AI-generated game content."""
 
 from app.schemas.game import (
+    SCHEMA_VERSION,
     ActStub,
     BloomLevel,
     CampaignOutline,
@@ -17,7 +18,6 @@ from app.schemas.game import (
     QuestionType,
     Reward,
     RewardKind,
-    SCHEMA_VERSION,
 )
 
 __all__ = [
