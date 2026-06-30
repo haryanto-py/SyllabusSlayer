@@ -18,6 +18,7 @@ from openai import OpenAI
 
 from app.core.config import settings
 from app.schemas.game import CampaignOutline, EncounterStub, QuestionBatch
+from app.services.ingestion import ParsedDocument
 
 OUTLINE_INSTRUCTIONS = (
     "You are a curriculum designer turning a teacher's source material into the OUTLINE of a "
@@ -46,6 +47,13 @@ QUESTION_INSTRUCTIONS = (
     "- Fill ONLY the fields for the chosen questionType; set every other per-type field to null.\n"
     "- Always write a one-sentence explanation justifying the correct answer.\n"
     "- Prefer multiple_choice and true_false for reliability; use other types only when they fit."
+)
+
+SUMMARY_INSTRUCTIONS = (
+    "You are condensing one PART of a long course document into a compact outline digest for a "
+    "downstream campaign planner. List the distinct topics/sub-topics in this part, each as a short "
+    "bullet with a one-line description. Preserve key technical terms, names, and any numbering or "
+    "structure. Do not invent content. Be concise."
 )
 
 
@@ -77,6 +85,47 @@ def _parse(model: str, instructions: str, user: str, text_format, max_output_tok
         "reasoning": getattr(details, "reasoning_tokens", 0) or 0,
     }
     return parsed, usage
+
+
+def _complete(model: str, instructions: str, user: str, max_output_tokens: int) -> tuple[str, dict]:
+    """Plain-text Responses call (no schema). Used for the large-doc summary/map step."""
+    resp = _client().responses.create(
+        model=model,
+        instructions=instructions,
+        input=[{"role": "user", "content": user}],
+        reasoning={"effort": "low"},
+        max_output_tokens=max_output_tokens,
+    )
+    u = resp.usage
+    details = getattr(u, "output_tokens_details", None)
+    usage = {
+        "model": model,
+        "input": getattr(u, "input_tokens", 0) or 0,
+        "output": getattr(u, "output_tokens", 0) or 0,
+        "reasoning": getattr(details, "reasoning_tokens", 0) or 0,
+    }
+    return (resp.output_text or ""), usage
+
+
+def summarize_for_outline(
+    parsed: ParsedDocument, *, model: str | None = None,
+    batch_tokens: int = 20000, max_output_tokens: int = 2000,
+) -> tuple[str, list[dict]]:
+    """Map step for oversized docs: summarize the document in token-windows into a compact
+    digest the outline step can consume without exceeding the input budget."""
+    from app.services.chunking import token_windows
+
+    model = model or settings.openai_model_nano
+    windows = token_windows(parsed.markdown, batch_tokens)
+    parts: list[str] = []
+    usages: list[dict] = []
+    for i, window in enumerate(windows, start=1):
+        text, u = _complete(
+            model, SUMMARY_INSTRUCTIONS, f"PART {i} of {len(windows)}:\n\n{window}", max_output_tokens
+        )
+        parts.append(text.strip())
+        usages.append(u)
+    return "\n\n".join(p for p in parts if p), usages
 
 
 def generate_outline(

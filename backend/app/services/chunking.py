@@ -52,6 +52,11 @@ def _split_tokens(text: str, max_tokens: int, overlap: int) -> list[str]:
     return [enc.decode(ids[i : i + max_tokens]) for i in range(0, len(ids), step)]
 
 
+def token_windows(text: str, max_tokens: int) -> list[str]:
+    """Split text into consecutive, non-overlapping windows of <= max_tokens (for map steps)."""
+    return _split_tokens(text, max_tokens, 0)
+
+
 def chunk_document(
     parsed: ParsedDocument, *, max_tokens: int = 600, overlap: int = 80
 ) -> list[Chunk]:

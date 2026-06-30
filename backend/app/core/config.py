@@ -48,6 +48,9 @@ class Settings(BaseSettings):
     # --- RAG ---
     # If a section's token count exceeds this, use retrieval; else direct long-context.
     rag_token_threshold: int = 100_000
+    # If the whole document exceeds this, build the outline from per-chunk summaries
+    # (a map step) instead of raw text, so oversized uploads stay within the input budget.
+    outline_token_budget: int = 50_000
 
     # --- CORS ---  (teacher app :3000, student app :3001)
     cors_origins: list[str] = ["http://localhost:3000", "http://localhost:3001"]

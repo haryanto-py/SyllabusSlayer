@@ -7,8 +7,10 @@ reports token usage + an estimated cost.
 
 from __future__ import annotations
 
+from app.core.config import settings
 from app.schemas.game import SCHEMA_VERSION, CombatConfig
 from app.services import combat_tuning, evals, generation, retrieval
+from app.services.chunking import count_tokens
 from app.services.ingestion import ParsedDocument, flatten
 
 # Top-k chunks retrieved as question-gen context when a doc has no usable headings.
@@ -69,12 +71,27 @@ def build_game(
     *, parsed: ParsedDocument, source_document_id: str, title: str | None = None,
     cfg: CombatConfig | None = None, outline_model: str | None = None,
     question_model: str | None = None, max_encounters: int | None = None,
+    outline_token_budget: int | None = None,
 ) -> dict:
     cfg = cfg or combat_tuning.default_combat_config()
     usages: list[dict] = []
 
+    # Oversized docs: outline from a condensed digest (map step) so we stay within the
+    # input budget. Normal-sized docs feed their cleaned text directly.
+    budget = (
+        outline_token_budget if outline_token_budget is not None
+        else settings.outline_token_budget
+    )
+    if count_tokens(parsed.markdown) > budget:
+        outline_source, digest_usages = generation.summarize_for_outline(
+            parsed, model=outline_model
+        )
+        usages.extend(digest_usages)
+    else:
+        outline_source = parsed.markdown
+
     outline, u = generation.generate_outline(
-        source_document_id=source_document_id, doc_markdown=parsed.markdown, model=outline_model
+        source_document_id=source_document_id, doc_markdown=outline_source, model=outline_model
     )
     usages.append(u)
     if title:

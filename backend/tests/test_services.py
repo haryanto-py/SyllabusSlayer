@@ -185,6 +185,30 @@ def test_retrieval_returns_relevant_chunk(monkeypatch):
     assert hits and "alpha" in hits[0].text
 
 
+# --- large-document handling (T4) ------------------------------------------- #
+def test_token_windows_cover_full_text():
+    from app.services.chunking import token_windows
+
+    text = "lorem ipsum dolor sit amet " * 200
+    windows = token_windows(text, 50)
+    assert len(windows) > 1
+    assert "".join(windows) == text
+
+
+def test_summarize_for_outline_maps_each_window(monkeypatch):
+    from app.services import generation
+
+    monkeypatch.setattr(
+        generation,
+        "_complete",
+        lambda *a, **k: ("DIGEST_PART", {"model": "fake", "input": 0, "output": 0, "reasoning": 0}),
+    )
+    parsed = parse_markdown("word " * 300)  # ~300 tokens → several windows
+    digest, usages = generation.summarize_for_outline(parsed, batch_tokens=50)
+    assert "DIGEST_PART" in digest
+    assert len(usages) >= 2
+
+
 # --- schema validator ------------------------------------------------------- #
 def test_question_validator_rejects_bad_mcq():
     with pytest.raises(ValidationError):

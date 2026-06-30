@@ -32,6 +32,9 @@ def main() -> None:
     ap.add_argument("--max-encounters", type=int, default=None)
     ap.add_argument("--outline-model", default=None)
     ap.add_argument("--question-model", default=None)
+    ap.add_argument(
+        "--outline-budget", type=int, default=None, help="force map-step if doc exceeds this"
+    )
     ap.add_argument("--title", default=None)
     args = ap.parse_args()
 
@@ -44,6 +47,7 @@ def main() -> None:
         outline_model=args.outline_model,
         question_model=args.question_model,
         max_encounters=args.max_encounters,
+        outline_token_budget=args.outline_budget,
     )
 
     out_dir = _REPO / "docs" / "examples"
