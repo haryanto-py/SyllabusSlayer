@@ -20,32 +20,18 @@ from app.core.db import get_session
 from app.core.security import CurrentUser, require_student
 from app.models.tables import (
     Campaign,
+    Class,
+    Enrollment,
     PlaySession,
     QuestionAttempt,
     SessionStatus,
     User,
-    UserRole,
 )
 from app.schemas.game import CombatConfig
 from app.services import scoring
+from app.services.users import get_or_create_user
 
 router = APIRouter(prefix="/student", tags=["student"], dependencies=[Depends(require_student)])
-
-
-def _get_or_create_student(session: Session, current: CurrentUser) -> User:
-    user = session.exec(select(User).where(User.auth_provider_id == current.sub)).first()
-    if user:
-        return user
-    user = User(
-        email=current.email or f"{current.sub}@local",
-        role=UserRole.student,
-        display_name=(current.email or current.sub).split("@")[0],
-        auth_provider_id=current.sub,
-    )
-    session.add(user)
-    session.commit()
-    session.refresh(user)
-    return user
 
 
 def _load_session(session: Session, session_id: str, user: User) -> PlaySession:
@@ -70,7 +56,7 @@ def start_play(
     session: Session = Depends(get_session),
     current: CurrentUser = Depends(require_student),
 ) -> dict:
-    user = _get_or_create_student(session, current)
+    user = get_or_create_user(session, current)
     campaign = session.get(Campaign, campaign_id)
     if not campaign or not campaign.game_json:
         raise HTTPException(404, "campaign not found")
@@ -107,7 +93,7 @@ def submit_answer(
     session: Session = Depends(get_session),
     current: CurrentUser = Depends(require_student),
 ) -> dict:
-    user = _get_or_create_student(session, current)
+    user = get_or_create_user(session, current)
     ps = _load_session(session, session_id, user)
     if ps.status != SessionStatus.in_progress:
         raise HTTPException(409, "play session is not in progress")
@@ -169,7 +155,7 @@ def finish_play(
     session: Session = Depends(get_session),
     current: CurrentUser = Depends(require_student),
 ) -> dict:
-    user = _get_or_create_student(session, current)
+    user = get_or_create_user(session, current)
     ps = _load_session(session, session_id, user)
     campaign = session.get(Campaign, ps.campaign_id)
     cfg = _cfg(campaign) if campaign else CombatConfig()
@@ -185,3 +171,47 @@ def finish_play(
         "hp": ps.hp_remaining,
         "level": scoring.level_for_xp(ps.final_xp or 0, cfg),
     }
+
+
+# --------------------------------------------------------------------------- #
+# Classes (M3-T1): join by code + list memberships
+# --------------------------------------------------------------------------- #
+class JoinIn(BaseModel):
+    join_code: str
+
+
+@router.post("/classes/join")
+def join_class(
+    body: JoinIn,
+    session: Session = Depends(get_session),
+    current: CurrentUser = Depends(require_student),
+) -> dict:
+    user = get_or_create_user(session, current)
+    code = body.join_code.strip().upper()
+    cls = session.exec(select(Class).where(Class.join_code == code)).first()
+    if not cls:
+        raise HTTPException(404, "no class with that code")
+    existing = session.exec(
+        select(Enrollment).where(
+            Enrollment.class_id == cls.id, Enrollment.student_id == user.id
+        )
+    ).first()
+    if not existing:
+        session.add(Enrollment(class_id=cls.id, student_id=user.id))
+        session.commit()
+    return {"id": cls.id, "name": cls.name}
+
+
+@router.get("/classes")
+def my_classes(
+    session: Session = Depends(get_session),
+    current: CurrentUser = Depends(require_student),
+) -> list[dict]:
+    user = get_or_create_user(session, current)
+    enrollments = session.exec(select(Enrollment).where(Enrollment.student_id == user.id)).all()
+    out = []
+    for enr in enrollments:
+        cls = session.get(Class, enr.class_id)
+        if cls:
+            out.append({"id": cls.id, "name": cls.name})
+    return out

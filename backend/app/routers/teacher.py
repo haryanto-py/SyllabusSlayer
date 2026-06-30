@@ -11,6 +11,7 @@ arrive in M3.
 
 from __future__ import annotations
 
+import secrets
 from pathlib import Path
 from uuid import uuid4
 
@@ -24,34 +25,32 @@ from app.models.tables import (
     Campaign,
     CampaignStatus,
     Chunk,
+    Class,
     Document,
     DocumentStatus,
+    Enrollment,
     User,
-    UserRole,
 )
 from app.services import assembly, embeddings
 from app.services.chunking import chunk_document, count_tokens
 from app.services.ingestion import flatten, parse_document, parse_markdown
+from app.services.users import get_or_create_user
 
 router = APIRouter(prefix="/teacher", tags=["teacher"], dependencies=[Depends(require_teacher)])
 
 _UPLOAD_DIR = Path(__file__).resolve().parents[2] / "uploads"
 
 
-def _get_or_create_user(session: Session, current: CurrentUser) -> User:
-    user = session.exec(select(User).where(User.auth_provider_id == current.sub)).first()
-    if user:
-        return user
-    user = User(
-        email=current.email or f"{current.sub}@local",
-        role=UserRole.teacher,
-        display_name=(current.email or current.sub).split("@")[0],
-        auth_provider_id=current.sub,
-    )
-    session.add(user)
-    session.commit()
-    session.refresh(user)
-    return user
+# Join codes avoid ambiguous characters (no 0/O, 1/I).
+_CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
+
+
+def _gen_join_code(session: Session, length: int = 6) -> str:
+    for _ in range(20):
+        code = "".join(secrets.choice(_CODE_ALPHABET) for _ in range(length))
+        if not session.exec(select(Class).where(Class.join_code == code)).first():
+            return code
+    raise HTTPException(500, "could not allocate a unique join code")
 
 
 @router.get("/me")
@@ -73,7 +72,7 @@ async def upload_document(
     session: Session = Depends(get_session),
     current: CurrentUser = Depends(require_teacher),
 ) -> DocumentOut:
-    user = _get_or_create_user(session, current)
+    user = get_or_create_user(session, current)
     _UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
     doc_id = str(uuid4())
     dest = _UPLOAD_DIR / f"{doc_id}_{file.filename or 'upload'}"
@@ -156,7 +155,7 @@ def generate_campaign(
     session: Session = Depends(get_session),
     current: CurrentUser = Depends(require_teacher),
 ) -> GenerateOut:
-    user = _get_or_create_user(session, current)
+    user = get_or_create_user(session, current)
     doc = session.get(Document, body.document_id)
     if not doc or doc.owner_id != user.id:
         raise HTTPException(404, "document not found")
@@ -204,3 +203,68 @@ def get_campaign(
         "status": campaign.status.value,
         "game": campaign.game_json,
     }
+
+
+# --------------------------------------------------------------------------- #
+# Classes & roster (M3-T1)
+# --------------------------------------------------------------------------- #
+class ClassCreate(BaseModel):
+    name: str
+
+
+class ClassOut(BaseModel):
+    id: str
+    name: str
+    join_code: str
+    student_count: int
+
+
+@router.post("/classes", response_model=ClassOut)
+def create_class(
+    body: ClassCreate,
+    session: Session = Depends(get_session),
+    current: CurrentUser = Depends(require_teacher),
+) -> ClassOut:
+    user = get_or_create_user(session, current)
+    cls = Class(teacher_id=user.id, name=body.name, join_code=_gen_join_code(session))
+    session.add(cls)
+    session.commit()
+    session.refresh(cls)
+    return ClassOut(id=cls.id, name=cls.name, join_code=cls.join_code, student_count=0)
+
+
+@router.get("/classes", response_model=list[ClassOut])
+def list_classes(
+    session: Session = Depends(get_session),
+    current: CurrentUser = Depends(require_teacher),
+) -> list[ClassOut]:
+    user = get_or_create_user(session, current)
+    classes = session.exec(select(Class).where(Class.teacher_id == user.id)).all()
+    out = []
+    for cls in classes:
+        count = len(session.exec(select(Enrollment).where(Enrollment.class_id == cls.id)).all())
+        out.append(
+            ClassOut(id=cls.id, name=cls.name, join_code=cls.join_code, student_count=count)
+        )
+    return out
+
+
+@router.get("/classes/{class_id}")
+def class_detail(
+    class_id: str,
+    session: Session = Depends(get_session),
+    current: CurrentUser = Depends(require_teacher),
+) -> dict:
+    user = get_or_create_user(session, current)
+    cls = session.get(Class, class_id)
+    if not cls or cls.teacher_id != user.id:
+        raise HTTPException(404, "class not found")
+    enrollments = session.exec(select(Enrollment).where(Enrollment.class_id == class_id)).all()
+    roster = []
+    for enr in enrollments:
+        student = session.get(User, enr.student_id)
+        if student:
+            roster.append(
+                {"id": student.id, "display_name": student.display_name, "email": student.email}
+            )
+    return {"id": cls.id, "name": cls.name, "join_code": cls.join_code, "roster": roster}

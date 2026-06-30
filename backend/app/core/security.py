@@ -29,13 +29,15 @@ class CurrentUser:
 def get_current_user(
     creds: HTTPAuthorizationCredentials | None = Depends(_bearer),
     dev_role: str | None = Header(default=None, alias="X-Dev-Role"),
+    dev_user: str | None = Header(default=None, alias="X-Dev-User"),
 ) -> CurrentUser:
-    # Dev convenience: no secret configured -> stub identity (NEVER in prod). The
-    # X-Dev-Role header lets the teacher/student apps act as their role until Supabase
-    # auth lands in M3.
+    # Dev convenience: no secret configured -> stub identity (NEVER in prod). X-Dev-Role
+    # picks the role; X-Dev-User picks a distinct identity (so multiple students/classes
+    # can be simulated). Real Supabase auth replaces this in M3-T6.
     if settings.env == "dev" and not settings.supabase_jwt_secret:
         role = dev_role if dev_role in ("teacher", "student") else "teacher"
-        return CurrentUser(sub=f"dev-{role}", email=f"dev-{role}@local", role=role)
+        sub = dev_user or f"dev-{role}"
+        return CurrentUser(sub=sub, email=f"{sub}@local", role=role)
 
     if creds is None:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Missing bearer token")

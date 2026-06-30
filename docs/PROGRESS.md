@@ -2,7 +2,18 @@
 
 Small, committed increments so work survives a mid-session cutoff. Tick items as they land; each ticked item = a commit.
 
-## Done: M2 — play one game (student client) ✅  ·  Next: M3 — LMS + dashboard
+## Current: M3 — LMS + dashboard
+
+Auth runs on the dev shim for now; real Supabase auth is T6 (needs the user's Supabase project).
+
+- [x] **T1. Classes + enrollment (backend)** — DONE. Teacher: `POST/GET /teacher/classes`, `GET /teacher/classes/{id}` (roster); student: `POST /student/classes/join` (by code, idempotent), `GET /student/classes`. Unambiguous 6-char join codes. Dev shim extended with `X-Dev-User` (multi-user sim); DRYed user upsert into `services/users.py`. 21 tests pass.
+- [ ] **T2. Assignments (backend)** — teacher assigns a campaign to a class; student lists assigned games; play sessions can link to the assignment.
+- [ ] **T3. Teacher review/edit** — fetch a campaign's full game for review; edit/approve a question; publish. Teacher review screen.
+- [ ] **T4. Dashboard analytics** — aggregate `question_attempts` → per-topic mastery, per-student, item difficulty, completion. Teacher dashboard.
+- [ ] **T5. App pages** — teacher: classes / roster / assign / review / dashboard; student: join-by-code + assigned-games list.
+- [ ] **T6. (deferred) Real Supabase auth** — replace the dev shim; needs a Supabase project + creds.
+
+## Done: M2 — play one game (student client) ✅
 
 - [x] **T1. Student play API + scoring (backend)** — DONE. `services/scoring.py` (redact_game, check_answer for all 6 types, streak/damage/XP/level); `routers/student.py` endpoints `POST /student/play/{campaign_id}/start` (returns redacted game + combatConfig + session), `/play/{session_id}/answer` (server-checks, persists `QuestionAttempt`, returns verdict + HP/streak/XP/score + explanation/citation), `/play/{session_id}/finish`. `PlaySession.campaign_id` added (nullable). 20 tests pass incl. a full play-flow API test.
 - [x] **T2. Combat engine (shared/client)** — DONE. `apps/student/src/lib`: `types.ts` (redacted play types), `play.ts` (start/answer/finish client), `combatStore.ts` (Zustand phase machine: presenting → feedback → advance → victory/defeat, driven by server verdicts). Decision: Zustand phase machine over XState for M2 (spec-blessed pragmatic start); graduate later if relics/phases grow.

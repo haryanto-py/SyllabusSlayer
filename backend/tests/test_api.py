@@ -178,3 +178,41 @@ def test_student_play_flow(tmp_path):
         assert r3.json()["status"] == "completed" and r3.json()["score"] == 10
     finally:
         app.dependency_overrides.clear()
+
+
+def test_classes_and_enrollment(tmp_path):
+    app.dependency_overrides[get_session] = _temp_session_override(tmp_path)
+    try:
+        client = TestClient(app)
+        teacher = {"X-Dev-Role": "teacher"}
+
+        r = client.post("/teacher/classes", json={"name": "Bio 101"}, headers=teacher)
+        assert r.status_code == 200, r.text
+        cid, code = r.json()["id"], r.json()["join_code"]
+        assert len(code) == 6
+
+        for sid in ("stud-a", "stud-b"):
+            hdr = {"X-Dev-Role": "student", "X-Dev-User": sid}
+            jr = client.post("/student/classes/join", json={"join_code": code}, headers=hdr)
+            assert jr.status_code == 200, jr.text
+            assert jr.json()["id"] == cid
+
+        # re-join is idempotent (no duplicate enrollment)
+        client.post("/student/classes/join", json={"join_code": code},
+                    headers={"X-Dev-Role": "student", "X-Dev-User": "stud-a"})
+
+        roster = client.get(f"/teacher/classes/{cid}", headers=teacher).json()["roster"]
+        assert len(roster) == 2
+
+        mine = client.get("/student/classes",
+                          headers={"X-Dev-Role": "student", "X-Dev-User": "stud-a"}).json()
+        assert any(c["id"] == cid for c in mine)
+
+        bad = client.post("/student/classes/join", json={"join_code": "ZZZZZZ"},
+                          headers={"X-Dev-Role": "student", "X-Dev-User": "stud-a"})
+        assert bad.status_code == 404
+
+        listed = client.get("/teacher/classes", headers=teacher).json()
+        assert listed[0]["student_count"] == 2
+    finally:
+        app.dependency_overrides.clear()
