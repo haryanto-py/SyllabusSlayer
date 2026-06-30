@@ -12,16 +12,19 @@ arrive in M3.
 from __future__ import annotations
 
 import secrets
+from datetime import datetime
 from pathlib import Path
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from pydantic import BaseModel
+from sqlalchemy.orm.attributes import flag_modified
 from sqlmodel import Session, select
 
 from app.core.db import get_session
 from app.core.security import CurrentUser, require_teacher
 from app.models.tables import (
+    Assignment,
     Campaign,
     CampaignStatus,
     Chunk,
@@ -29,9 +32,13 @@ from app.models.tables import (
     Document,
     DocumentStatus,
     Enrollment,
+    PlaySession,
+    QuestionAttempt,
+    SessionStatus,
     User,
 )
-from app.services import assembly, embeddings
+from app.schemas.game import CombatConfig, EncounterKind, Question
+from app.services import analytics, assembly, combat_tuning, embeddings
 from app.services.chunking import chunk_document, count_tokens
 from app.services.ingestion import flatten, parse_document, parse_markdown
 from app.services.users import get_or_create_user
@@ -268,3 +275,200 @@ def class_detail(
                 {"id": student.id, "display_name": student.display_name, "email": student.email}
             )
     return {"id": cls.id, "name": cls.name, "join_code": cls.join_code, "roster": roster}
+
+
+# --------------------------------------------------------------------------- #
+# Assignments (M3-T2): assign a campaign to a class
+# --------------------------------------------------------------------------- #
+class AssignmentCreate(BaseModel):
+    campaign_id: str
+    due_at: datetime | None = None
+
+
+class AssignmentOut(BaseModel):
+    id: str
+    campaign_id: str
+    campaign_title: str
+    class_id: str
+    due_at: datetime | None
+
+
+def _require_owned_class(session: Session, class_id: str, user: User) -> Class:
+    cls = session.get(Class, class_id)
+    if not cls or cls.teacher_id != user.id:
+        raise HTTPException(404, "class not found")
+    return cls
+
+
+@router.post("/classes/{class_id}/assignments", response_model=AssignmentOut)
+def create_assignment(
+    class_id: str,
+    body: AssignmentCreate,
+    session: Session = Depends(get_session),
+    current: CurrentUser = Depends(require_teacher),
+) -> AssignmentOut:
+    user = get_or_create_user(session, current)
+    _require_owned_class(session, class_id, user)
+    campaign = session.get(Campaign, body.campaign_id)
+    if not campaign or campaign.teacher_id != user.id:
+        raise HTTPException(404, "campaign not found")
+    assignment = Assignment(campaign_id=campaign.id, class_id=class_id, due_at=body.due_at)
+    session.add(assignment)
+    session.commit()
+    session.refresh(assignment)
+    return AssignmentOut(
+        id=assignment.id, campaign_id=campaign.id, campaign_title=campaign.title,
+        class_id=class_id, due_at=assignment.due_at,
+    )
+
+
+@router.get("/classes/{class_id}/assignments", response_model=list[AssignmentOut])
+def list_assignments(
+    class_id: str,
+    session: Session = Depends(get_session),
+    current: CurrentUser = Depends(require_teacher),
+) -> list[AssignmentOut]:
+    user = get_or_create_user(session, current)
+    _require_owned_class(session, class_id, user)
+    rows = session.exec(select(Assignment).where(Assignment.class_id == class_id)).all()
+    out = []
+    for a in rows:
+        camp = session.get(Campaign, a.campaign_id)
+        out.append(
+            AssignmentOut(
+                id=a.id, campaign_id=a.campaign_id,
+                campaign_title=camp.title if camp else "(deleted)",
+                class_id=class_id, due_at=a.due_at,
+            )
+        )
+    return out
+
+
+# --------------------------------------------------------------------------- #
+# Campaign list + review/edit + publish (M3-T3)
+# --------------------------------------------------------------------------- #
+@router.get("/campaigns")
+def list_campaigns(
+    session: Session = Depends(get_session),
+    current: CurrentUser = Depends(require_teacher),
+) -> list[dict]:
+    user = get_or_create_user(session, current)
+    rows = session.exec(select(Campaign).where(Campaign.teacher_id == user.id)).all()
+    return [{"id": c.id, "title": c.title, "status": c.status.value} for c in rows]
+
+
+def _recompute_combat(enc: dict, cfg: CombatConfig) -> None:
+    questions = [Question.model_validate(q) for q in enc.get("questions", [])]
+    kind = EncounterKind(enc.get("kind", "minion"))
+    enc["combat"] = combat_tuning.compute_encounter_combat(
+        questions, kind, cfg
+    ).model_dump(mode="json")
+
+
+@router.put("/campaigns/{campaign_id}/questions/{question_id}")
+def edit_question(
+    campaign_id: str,
+    question_id: str,
+    body: Question,
+    session: Session = Depends(get_session),
+    current: CurrentUser = Depends(require_teacher),
+) -> dict:
+    user = get_or_create_user(session, current)
+    campaign = session.get(Campaign, campaign_id)
+    if not campaign or campaign.teacher_id != user.id or not campaign.game_json:
+        raise HTTPException(404, "campaign not found")
+    game = campaign.game_json
+    cfg = CombatConfig.model_validate(campaign.combat_config or {})
+    updated = body.model_copy(update={"questionId": question_id}).model_dump(mode="json")
+    for act in game.get("acts", []):
+        for enc in act.get("encounters", []):
+            for i, q in enumerate(enc.get("questions", [])):
+                if q.get("questionId") == question_id:
+                    enc["questions"][i] = updated
+                    _recompute_combat(enc, cfg)
+                    campaign.game_json = game
+                    flag_modified(campaign, "game_json")  # JSON in-place edit needs flagging
+                    session.add(campaign)
+                    session.commit()
+                    return {"ok": True, "question": updated}
+    raise HTTPException(404, "question not found in campaign")
+
+
+@router.post("/campaigns/{campaign_id}/publish")
+def publish_campaign(
+    campaign_id: str,
+    session: Session = Depends(get_session),
+    current: CurrentUser = Depends(require_teacher),
+) -> dict:
+    user = get_or_create_user(session, current)
+    campaign = session.get(Campaign, campaign_id)
+    if not campaign or campaign.teacher_id != user.id:
+        raise HTTPException(404, "campaign not found")
+    campaign.status = CampaignStatus.published
+    session.add(campaign)
+    session.commit()
+    return {"id": campaign.id, "status": campaign.status.value}
+
+
+# --------------------------------------------------------------------------- #
+# Dashboard analytics (M3-T4)
+# --------------------------------------------------------------------------- #
+@router.get("/campaigns/{campaign_id}/analytics")
+def campaign_analytics(
+    campaign_id: str,
+    class_id: str,
+    session: Session = Depends(get_session),
+    current: CurrentUser = Depends(require_teacher),
+) -> dict:
+    user = get_or_create_user(session, current)
+    campaign = session.get(Campaign, campaign_id)
+    if not campaign or campaign.teacher_id != user.id or not campaign.game_json:
+        raise HTTPException(404, "campaign not found")
+    _require_owned_class(session, class_id, user)
+
+    roster = session.exec(select(Enrollment).where(Enrollment.class_id == class_id)).all()
+    qindex = analytics.build_question_index(campaign.game_json)
+    all_attempts: list = []
+    students = []
+    for enr in roster:
+        student = session.get(User, enr.student_id)
+        sessions = session.exec(
+            select(PlaySession).where(
+                PlaySession.campaign_id == campaign_id,
+                PlaySession.student_id == enr.student_id,
+            )
+        ).all()
+        sess_ids = [s.id for s in sessions]
+        attempts: list = []
+        if sess_ids:
+            attempts = session.exec(
+                select(QuestionAttempt).where(QuestionAttempt.session_id.in_(sess_ids))
+            ).all()
+        all_attempts.extend(attempts)
+        correct = sum(1 for a in attempts if a.is_correct)
+        students.append(
+            {
+                "student_id": enr.student_id,
+                "name": student.display_name if student else "?",
+                "attempts": len(attempts),
+                "correct": correct,
+                "accuracy": round(correct / len(attempts), 3) if attempts else 0.0,
+                "best_score": max((s.final_score or 0 for s in sessions), default=0),
+                "completed": any(s.status == SessionStatus.completed for s in sessions),
+            }
+        )
+    topics, items = analytics.aggregate(all_attempts, qindex)
+    total_correct = sum(1 for a in all_attempts if a.is_correct)
+    return {
+        "campaign_id": campaign_id,
+        "class_id": class_id,
+        "students": students,
+        "topics": topics,
+        "items": items,
+        "summary": {
+            "roster_size": len(roster),
+            "started": sum(1 for s in students if s["attempts"] > 0),
+            "completed": sum(1 for s in students if s["completed"]),
+            "avg_accuracy": round(total_correct / len(all_attempts), 3) if all_attempts else 0.0,
+        },
+    }

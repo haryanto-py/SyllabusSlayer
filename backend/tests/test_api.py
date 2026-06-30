@@ -216,3 +216,72 @@ def test_classes_and_enrollment(tmp_path):
         assert listed[0]["student_count"] == 2
     finally:
         app.dependency_overrides.clear()
+
+
+def test_lms_assign_play_review_analytics(tmp_path):
+    from sqlmodel import select
+
+    from app.models.tables import Campaign, CampaignStatus, User
+
+    engine = create_engine(
+        f"sqlite:///{tmp_path / 'lms.db'}", connect_args={"check_same_thread": False}
+    )
+    SQLModel.metadata.create_all(engine)
+
+    def _override():
+        with Session(engine) as session:
+            yield session
+
+    app.dependency_overrides[get_session] = _override
+    teacher = {"X-Dev-Role": "teacher"}
+    student = {"X-Dev-Role": "student", "X-Dev-User": "stud-x"}
+    try:
+        client = TestClient(app)
+        cls = client.post("/teacher/classes", json={"name": "C"}, headers=teacher).json()
+        cid, code = cls["id"], cls["join_code"]
+
+        # seed a campaign owned by the dev-teacher (campaigns normally come from generate())
+        with Session(engine) as s:
+            t = s.exec(select(User).where(User.auth_provider_id == "dev-teacher")).first()
+            game = _seed_game()
+            s.add(Campaign(id="lms_camp", document_id="d", teacher_id=t.id, title="T",
+                           status=CampaignStatus.ready, game_json=game,
+                           combat_config=game["combatConfig"], schema_version="1.0.0"))
+            s.commit()
+
+        client.post("/student/classes/join", json={"join_code": code}, headers=student)
+
+        asg = client.post(f"/teacher/classes/{cid}/assignments",
+                          json={"campaign_id": "lms_camp"}, headers=teacher)
+        assert asg.status_code == 200, asg.text
+        aid = asg.json()["id"]
+
+        mine = client.get("/student/assignments", headers=student).json()
+        assert any(a["campaign_id"] == "lms_camp" for a in mine)
+
+        st = client.post(f"/student/play/lms_camp/start?assignment_id={aid}", headers=student)
+        assert st.status_code == 200, st.text
+        sid = st.json()["session_id"]
+        client.post(f"/student/play/{sid}/answer", headers=student,
+                    json={"encounter_id": "e1", "question_id": "q1", "answer": "a"})
+
+        # review: edit q1, then publish
+        edit = client.put("/teacher/campaigns/lms_camp/questions/q1", headers=teacher, json={
+            "questionId": "q1", "questionType": "multiple_choice", "bloomLevel": "remember",
+            "difficulty": "easy", "prompt": "Edited prompt?", "sourceChunkIds": ["c"],
+            "sourceQuote": "sky is blue", "sourcePage": 1, "explanation": "e", "hint": None,
+            "options": [{"optionId": "a", "text": "blue"}, {"optionId": "b", "text": "red"}],
+            "correctOptionIds": ["a"], "correctBoolean": None, "acceptedAnswers": None,
+            "caseSensitive": None, "orderedItems": None, "matchPairs": None})
+        assert edit.status_code == 200, edit.text
+        assert client.post("/teacher/campaigns/lms_camp/publish",
+                           headers=teacher).json()["status"] == "published"
+
+        # analytics reflects the student's attempt
+        an = client.get(f"/teacher/campaigns/lms_camp/analytics?class_id={cid}",
+                        headers=teacher).json()
+        assert an["summary"]["roster_size"] == 1
+        assert an["students"][0]["attempts"] >= 1
+        assert an["topics"] and an["items"]
+    finally:
+        app.dependency_overrides.clear()

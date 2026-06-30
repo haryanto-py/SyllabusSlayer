@@ -7,9 +7,9 @@ Small, committed increments so work survives a mid-session cutoff. Tick items as
 Auth runs on the dev shim for now; real Supabase auth is T6 (needs the user's Supabase project).
 
 - [x] **T1. Classes + enrollment (backend)** — DONE. Teacher: `POST/GET /teacher/classes`, `GET /teacher/classes/{id}` (roster); student: `POST /student/classes/join` (by code, idempotent), `GET /student/classes`. Unambiguous 6-char join codes. Dev shim extended with `X-Dev-User` (multi-user sim); DRYed user upsert into `services/users.py`. 21 tests pass.
-- [ ] **T2. Assignments (backend)** — teacher assigns a campaign to a class; student lists assigned games; play sessions can link to the assignment.
-- [ ] **T3. Teacher review/edit** — fetch a campaign's full game for review; edit/approve a question; publish. Teacher review screen.
-- [ ] **T4. Dashboard analytics** — aggregate `question_attempts` → per-topic mastery, per-student, item difficulty, completion. Teacher dashboard.
+- [x] **T2. Assignments (backend)** — DONE. `POST/GET /teacher/classes/{id}/assignments`; `GET /student/assignments`; play `start` accepts `assignment_id`.
+- [x] **T3. Teacher review/edit (backend)** — DONE. `GET /teacher/campaigns` (list); `PUT /teacher/campaigns/{id}/questions/{qid}` (schema-validated edit + recompute encounter combat); `POST /teacher/campaigns/{id}/publish`. *(UI in T5.)*
+- [x] **T4. Dashboard analytics (backend)** — DONE. `services/analytics.py` + `GET /teacher/campaigns/{id}/analytics?class_id=` → per-student, per-topic mastery, item p-values, completion summary. *(UI in T5.)*
 - [ ] **T5. App pages** — teacher: classes / roster / assign / review / dashboard; student: join-by-code + assigned-games list.
 - [ ] **T6. (deferred) Real Supabase auth** — replace the dev shim; needs a Supabase project + creds.
 

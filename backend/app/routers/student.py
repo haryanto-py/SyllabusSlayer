@@ -19,6 +19,7 @@ from sqlmodel import Session, select
 from app.core.db import get_session
 from app.core.security import CurrentUser, require_student
 from app.models.tables import (
+    Assignment,
     Campaign,
     Class,
     Enrollment,
@@ -53,6 +54,7 @@ def whoami(user: CurrentUser = Depends(require_student)) -> dict:
 @router.post("/play/{campaign_id}/start")
 def start_play(
     campaign_id: str,
+    assignment_id: str | None = None,
     session: Session = Depends(get_session),
     current: CurrentUser = Depends(require_student),
 ) -> dict:
@@ -63,6 +65,7 @@ def start_play(
     cfg = _cfg(campaign)
     ps = PlaySession(
         campaign_id=campaign_id,
+        assignment_id=assignment_id,
         student_id=user.id,
         status=SessionStatus.in_progress,
         hp_remaining=cfg.playerStartingHp,
@@ -214,4 +217,29 @@ def my_classes(
         cls = session.get(Class, enr.class_id)
         if cls:
             out.append({"id": cls.id, "name": cls.name})
+    return out
+
+
+@router.get("/assignments")
+def my_assignments(
+    session: Session = Depends(get_session),
+    current: CurrentUser = Depends(require_student),
+) -> list[dict]:
+    user = get_or_create_user(session, current)
+    enrollments = session.exec(select(Enrollment).where(Enrollment.student_id == user.id)).all()
+    out = []
+    for enr in enrollments:
+        cls = session.get(Class, enr.class_id)
+        rows = session.exec(select(Assignment).where(Assignment.class_id == enr.class_id)).all()
+        for a in rows:
+            camp = session.get(Campaign, a.campaign_id)
+            out.append(
+                {
+                    "assignment_id": a.id,
+                    "campaign_id": a.campaign_id,
+                    "title": camp.title if camp else "(deleted)",
+                    "class_name": cls.name if cls else "(class)",
+                    "due_at": a.due_at.isoformat() if a.due_at else None,
+                }
+            )
     return out
