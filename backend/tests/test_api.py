@@ -13,7 +13,7 @@ from sqlmodel import Session, SQLModel, create_engine
 import app.models  # noqa: F401 — register tables on metadata
 from app.core.db import get_session
 from app.main import app
-from app.services import assembly
+from app.services import assembly, embeddings
 
 
 def _temp_session_override(tmp_path):
@@ -49,6 +49,12 @@ def _fake_build_game(*, parsed, source_document_id, title=None, **_):
 def test_teacher_upload_generate_fetch(monkeypatch, tmp_path):
     app.dependency_overrides[get_session] = _temp_session_override(tmp_path)
     monkeypatch.setattr(assembly, "build_game", _fake_build_game)
+    # Stub embeddings so the upload endpoint's chunk-embedding makes no API call.
+    monkeypatch.setattr(
+        embeddings,
+        "embed_texts_with_usage",
+        lambda texts, model=None: ([[0.0, 1.0] for _ in texts], {"model": "fake", "input": 0, "output": 0}),
+    )
     try:
         client = TestClient(app)
 

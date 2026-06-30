@@ -25,6 +25,19 @@ def embed_texts(texts: list[str], model: str | None = None) -> list[list[float]]
     return [d.embedding for d in resp.data]
 
 
+def embed_texts_with_usage(
+    texts: list[str], model: str | None = None
+) -> tuple[list[list[float]], dict]:
+    """Like embed_texts but also returns a usage dict for cost accounting."""
+    m = model or settings.openai_embedding_model
+    if not texts:
+        return [], {"model": m, "input": 0, "output": 0}
+    resp = _client().embeddings.create(model=m, input=texts)
+    vectors = [d.embedding for d in resp.data]
+    total = getattr(resp.usage, "total_tokens", 0) or getattr(resp.usage, "prompt_tokens", 0) or 0
+    return vectors, {"model": m, "input": total, "output": 0}
+
+
 def cosine(a: list[float], b: list[float]) -> float:
     dot = sum(x * y for x, y in zip(a, b, strict=False))
     na = math.sqrt(sum(x * x for x in a))

@@ -5,8 +5,8 @@ Small, committed increments so work survives a mid-session cutoff. Tick items as
 ## Current: M1.2 — RAG context + Docling ingestion
 
 - [x] **T1. Ingestion parser decision** — DONE. Docling installs & extracts real headings (57 on the PDF), BUT its preprocess stage OOMs (`std::bad_alloc`) on ~20 of ~80 pages on this 16GB/no-GPU box and silently drops them (only 6k of 30k tokens survived). MarkItDown extracts the full 30,267 tokens reliably (no headings). **Default = `markitdown`**; config `ingestion_parser` = markitdown | docling | auto (auto = Docling then MarkItDown fallback on partial). Docling viable only on bigger hardware or small docs → RAG context (T2/T3) is what makes the structureless MarkItDown output work well.
-- [ ] **T2. Embed + store chunks on ingestion** — chunk doc → `text-embedding-3-small` → persist on `Chunk` rows (JSON vectors locally; pgvector in prod).
-- [ ] **T3. Per-encounter retrieval context** — in `assembly.build_game`, retrieve top-k chunks by the encounter sub-topic as question-gen context (replaces whole-doc fallback). Falls back to section text / whole doc for tiny docs.
+- [x] **T2. Embed + store chunks on ingestion** — DONE. `embeddings.embed_texts_with_usage`; the upload endpoint chunks + embeds + persists `Chunk` rows (best-effort — stores text without vectors if embedding fails). Verified via stubbed API test.
+- [x] **T3. Per-encounter retrieval context** — DONE. `services/retrieval.py` (`build_index`/`search`). `build_game` uses matching section context first (free for structured docs), else lazily builds an index and retrieves top-5 chunks per encounter. **PDF result (3 enc): input 124.8k→81.2k tokens, cost $0.094→$0.036, grounding 80%→100%** (per-encounter question input ~10× smaller; ~6× cheaper at full scale).
 - [ ] **T4. Large-document handling** — if doc tokens exceed an outline budget, build the outline from per-chunk **summaries** (cheap map step) instead of raw text, so oversized uploads still work. Question-gen already bounded by T3.
 - [ ] **T5. Verify + tests + commit** — regression on cell-biology + the Korean PDF; check cost ↓ and grounding; add unit tests for retrieval + the size gate.
 

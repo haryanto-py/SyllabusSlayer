@@ -164,6 +164,27 @@ def test_dedupe_outline_removes_cross_act_duplicates():
     assert deduped.acts[1].encounters[0].order == 1  # orders renumbered in the kept act
 
 
+# --- retrieval (RAG) -------------------------------------------------------- #
+def test_retrieval_returns_relevant_chunk(monkeypatch):
+    from app.services import embeddings, retrieval
+
+    def _bow(texts, model=None):
+        # toy 2-D embedding: [count('alpha'), count('beta')]
+        return [[float(t.lower().count("alpha")), float(t.lower().count("beta"))] for t in texts]
+
+    monkeypatch.setattr(embeddings, "embed_texts", _bow)
+    monkeypatch.setattr(
+        embeddings,
+        "embed_texts_with_usage",
+        lambda texts, model=None: (_bow(texts), {"model": "fake", "input": 0, "output": 0}),
+    )
+    parsed = parse_markdown("# Doc\n## A\nalpha alpha alpha\n## B\nbeta beta beta\n")
+    index, usage = retrieval.build_index(parsed)
+    assert usage["model"] == "fake"
+    hits = index.search("alpha", k=1)
+    assert hits and "alpha" in hits[0].text
+
+
 # --- schema validator ------------------------------------------------------- #
 def test_question_validator_rejects_bad_mcq():
     with pytest.raises(ValidationError):

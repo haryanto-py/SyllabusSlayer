@@ -8,8 +8,11 @@ reports token usage + an estimated cost.
 from __future__ import annotations
 
 from app.schemas.game import SCHEMA_VERSION, CombatConfig
-from app.services import combat_tuning, evals, generation
+from app.services import combat_tuning, evals, generation, retrieval
 from app.services.ingestion import ParsedDocument, flatten
+
+# Top-k chunks retrieved as question-gen context when a doc has no usable headings.
+RETRIEVAL_K = 5
 
 # Per-1M-token (input, output) USD — research-current mid-2026; re-verify before relying.
 PRICING: dict[str, tuple[float, float]] = {
@@ -23,10 +26,14 @@ PRICING: dict[str, tuple[float, float]] = {
     "gpt-4.1": (2.00, 8.00),
     "gpt-4.1-mini": (0.40, 1.60),
     "gpt-4.1-nano": (0.10, 0.40),
+    # embeddings (input-priced only)
+    "text-embedding-3-small": (0.02, 0.0),
+    "text-embedding-3-large": (0.13, 0.0),
 }
 
 
-def _context_for_encounter(parsed: ParsedDocument, act_topic: str, sub_topic: str) -> str:
+def _section_context(parsed: ParsedDocument, act_topic: str, sub_topic: str) -> str | None:
+    """Focused context from the section tree, or None if no heading matches (→ use retrieval)."""
     sections = flatten(parsed.sections)
     sub = (sub_topic or "").lower()
     for s in sections:
@@ -37,7 +44,7 @@ def _context_for_encounter(parsed: ParsedDocument, act_topic: str, sub_topic: st
         title = (s.title or "").lower()
         if title and act_topic and act_topic.lower() in title:
             return s.text()
-    return parsed.markdown
+    return None
 
 
 def _sum_usage(usages: list[dict]) -> dict:
@@ -85,14 +92,29 @@ def build_game(
 
     encounter_evals = []
     acts_out = []
+    index: retrieval.RetrievalIndex | None = None
     for act in outline.acts:
         encounters_out = []
         for enc in act.encounters:
-            context = _context_for_encounter(parsed, act.syllabusTopic, enc.subTopic)
+            # Prefer a matching section (free, focused). If the doc has no usable
+            # structure, lazily build a retrieval index once and fetch top-k chunks so
+            # question-gen context stays small regardless of document size.
+            context = _section_context(parsed, act.syllabusTopic, enc.subTopic)
+            chunk_ids = [f"{source_document_id}::{enc.subTopic}"]
+            if context is None:
+                if index is None:
+                    index, emb_usage = retrieval.build_index(parsed)
+                    usages.append(emb_usage)
+                hits = index.search(enc.subTopic, k=RETRIEVAL_K)
+                if hits:
+                    context = "\n\n".join(h.text for h in hits)
+                    chunk_ids = [f"{source_document_id}::chunk_{h.ord}" for h in hits]
+                else:
+                    context = parsed.markdown  # last-resort fallback
             batch, u2 = generation.generate_questions(
                 encounter=enc,
                 context_text=context,
-                chunk_ids=[f"{source_document_id}::{enc.encounterId}"],
+                chunk_ids=chunk_ids,
                 model=question_model,
             )
             usages.append(u2)

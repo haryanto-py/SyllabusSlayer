@@ -23,13 +23,14 @@ from app.core.security import CurrentUser, require_teacher
 from app.models.tables import (
     Campaign,
     CampaignStatus,
+    Chunk,
     Document,
     DocumentStatus,
     User,
     UserRole,
 )
-from app.services import assembly
-from app.services.chunking import count_tokens
+from app.services import assembly, embeddings
+from app.services.chunking import chunk_document, count_tokens
 from app.services.ingestion import flatten, parse_document, parse_markdown
 
 router = APIRouter(prefix="/teacher", tags=["teacher"], dependencies=[Depends(require_teacher)])
@@ -109,6 +110,23 @@ async def upload_document(
     session.add(doc)
     session.commit()
     session.refresh(doc)
+
+    # Persist chunks for retrieval/reuse (T2). Embedding is best-effort: if it fails
+    # (e.g. no API key), store chunks without vectors so the upload still succeeds.
+    chunks = chunk_document(parsed)
+    try:
+        vectors, _ = embeddings.embed_texts_with_usage([c.text for c in chunks])
+    except Exception:  # noqa: BLE001
+        vectors = [None] * len(chunks)
+    for chunk, vec in zip(chunks, vectors, strict=False):
+        session.add(
+            Chunk(
+                document_id=doc.id, ord=chunk.ord, text=chunk.text,
+                section=chunk.section, embedding=vec,
+            )
+        )
+    session.commit()
+
     return DocumentOut(
         id=doc.id,
         filename=doc.filename,
