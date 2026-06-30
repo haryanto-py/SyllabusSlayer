@@ -40,6 +40,11 @@ class Settings(BaseSettings):
     openai_model_escalation: str = "gpt-5.5"     # hard chapters
     openai_embedding_model: str = "text-embedding-3-small"
 
+    # --- Ingestion ---
+    # "markitdown" (default, reliable/low-memory) | "docling" (richer structure but OOMs
+    # on large PDFs on a 16GB/no-GPU box) | "auto" (docling, fall back to markitdown).
+    ingestion_parser: str = "markitdown"
+
     # --- RAG ---
     # If a section's token count exceeds this, use retrieval; else direct long-context.
     rag_token_threshold: int = 100_000

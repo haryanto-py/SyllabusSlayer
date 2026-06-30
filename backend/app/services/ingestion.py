@@ -15,6 +15,8 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from app.core.config import settings
+
 _HEADING_RE = re.compile(r"^(#{1,6})\s+(.*)$")
 _PASSTHROUGH = {".md", ".markdown", ".txt"}
 
@@ -56,24 +58,58 @@ def parse_markdown(markdown: str) -> ParsedDocument:
 
 
 def _parse_binary(path: Path) -> str:
-    # Docling first (handles PDF/DOCX/PPTX/images + OCR), then MarkItDown.
-    try:
-        from docling.document_converter import DocumentConverter  # type: ignore
+    """Parse a non-Markdown file via the configured parser (settings.ingestion_parser).
 
-        return DocumentConverter().convert(str(path)).document.export_to_markdown()
-    except ImportError:
-        pass
-    except Exception:  # noqa: BLE001 — fall back to MarkItDown on any Docling failure
-        pass
-    try:
-        from markitdown import MarkItDown  # type: ignore
+    - "markitdown" (default): complete, fast, low-memory. No heading structure, but the
+      RAG/retrieval path supplies focused context, so that's fine.
+    - "docling": richer structure (real headings), BUT its preprocess stage exhausts
+      memory on large PDFs on a 16GB / no-GPU machine and silently drops pages. Use only
+      for small docs or on bigger hardware.
+    - "auto": try Docling; fall back to MarkItDown on import error OR partial conversion.
+    """
+    parser = (settings.ingestion_parser or "markitdown").lower()
+    if parser == "docling":
+        return _parse_docling(path)
+    if parser == "auto":
+        try:
+            return _parse_docling(path, strict=True)
+        except Exception:  # noqa: BLE001 — any Docling problem -> reliable fallback
+            return _parse_markitdown(path)
+    return _parse_markitdown(path)
 
-        return MarkItDown().convert(str(path)).text_content
+
+def _parse_docling(path: Path, *, strict: bool = False) -> str:
+    import warnings
+
+    from docling.datamodel.base_models import InputFormat
+    from docling.datamodel.pipeline_options import PdfPipelineOptions
+    from docling.document_converter import DocumentConverter, PdfFormatOption
+
+    opts = PdfPipelineOptions()
+    opts.do_ocr = False  # born-digital text; OCR is the heaviest stage
+    opts.do_table_structure = False
+    converter = DocumentConverter(
+        format_options={InputFormat.PDF: PdfFormatOption(pipeline_options=opts)}
+    )
+    result = converter.convert(str(path))
+    status = getattr(getattr(result, "status", None), "name", "")
+    if status and status != "SUCCESS":
+        msg = f"Docling conversion status={status} for {path.name}; output may be incomplete."
+        if strict:
+            raise RuntimeError(msg)
+        warnings.warn(msg, stacklevel=2)
+    return result.document.export_to_markdown()
+
+
+def _parse_markitdown(path: Path) -> str:
+    try:
+        from markitdown import MarkItDown
     except ImportError as exc:
         raise RuntimeError(
             f"No parser available for '{path.name}'. Install parsing extras: "
             "uv sync --extra ingestion"
         ) from exc
+    return MarkItDown().convert(str(path)).text_content
 
 
 def build_section_tree(markdown: str) -> list[Section]:
