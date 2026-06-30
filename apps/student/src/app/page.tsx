@@ -1,5 +1,7 @@
 import { SCHEMA_VERSION } from "@syllabusslayer/shared";
 
+import JoinForm from "@/components/JoinForm";
+
 export default function Home() {
   return (
     <div className="flex flex-1 flex-col items-center justify-center bg-gradient-to-b from-zinc-950 to-zinc-900 px-6 py-20 text-zinc-100">
@@ -17,21 +19,10 @@ export default function Home() {
           bonus damage, and conquer the course.
         </p>
 
-        <div className="mt-8 flex w-full max-w-sm items-center gap-2">
-          <input
-            disabled
-            placeholder="CLASS-CODE"
-            className="flex-1 rounded-lg border border-zinc-700 bg-zinc-900/70 px-4 py-3 text-center font-mono tracking-widest text-zinc-300 placeholder:text-zinc-600"
-          />
-          <button
-            type="button"
-            disabled
-            className="rounded-lg bg-amber-500/80 px-5 py-3 font-semibold text-zinc-950"
-          >
-            Enter
-          </button>
-        </div>
-        <p className="mt-3 text-xs text-zinc-600">Join + play arrives in M2.</p>
+        <JoinForm />
+        <p className="mt-3 text-xs text-zinc-600">
+          Enter a campaign id to start a run. (Join-by-class-code arrives in M3.)
+        </p>
 
         <p className="mt-12 text-xs text-zinc-700">schema v{SCHEMA_VERSION} · student app</p>
       </main>

@@ -11,7 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import jwt
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, Header, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.core.config import settings
@@ -28,10 +28,14 @@ class CurrentUser:
 
 def get_current_user(
     creds: HTTPAuthorizationCredentials | None = Depends(_bearer),
+    dev_role: str | None = Header(default=None, alias="X-Dev-Role"),
 ) -> CurrentUser:
-    # Dev convenience: no secret configured -> stub identity (NEVER in prod).
+    # Dev convenience: no secret configured -> stub identity (NEVER in prod). The
+    # X-Dev-Role header lets the teacher/student apps act as their role until Supabase
+    # auth lands in M3.
     if settings.env == "dev" and not settings.supabase_jwt_secret:
-        return CurrentUser(sub="dev-teacher", email="dev@local", role="teacher")
+        role = dev_role if dev_role in ("teacher", "student") else "teacher"
+        return CurrentUser(sub=f"dev-{role}", email=f"dev-{role}@local", role=role)
 
     if creds is None:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Missing bearer token")

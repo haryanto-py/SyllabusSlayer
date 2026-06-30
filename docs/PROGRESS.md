@@ -2,12 +2,12 @@
 
 Small, committed increments so work survives a mid-session cutoff. Tick items as they land; each ticked item = a commit.
 
-## Current: M2 — play one game (student client)
+## Done: M2 — play one game (student client) ✅  ·  Next: M3 — LMS + dashboard
 
 - [x] **T1. Student play API + scoring (backend)** — DONE. `services/scoring.py` (redact_game, check_answer for all 6 types, streak/damage/XP/level); `routers/student.py` endpoints `POST /student/play/{campaign_id}/start` (returns redacted game + combatConfig + session), `/play/{session_id}/answer` (server-checks, persists `QuestionAttempt`, returns verdict + HP/streak/XP/score + explanation/citation), `/play/{session_id}/finish`. `PlaySession.campaign_id` added (nullable). 20 tests pass incl. a full play-flow API test.
-- [ ] **T2. Combat engine (shared/client)** — pure TS domain (apply-answer / streak / HP / XP) in packages/shared; Zustand store + XState combat machine in apps/student.
-- [ ] **T3. Combat UI (student app)** — React+Tailwind+Motion: boss + HP bars, question card (MCQ/multi/TF), streak/damage animations, rewards, win/lose, progress; wired to the play API.
-- [ ] **T4. Verify** — play a seeded game end-to-end; scoring/persistence correct; scoring unit tests + a play-flow API test.
+- [x] **T2. Combat engine (shared/client)** — DONE. `apps/student/src/lib`: `types.ts` (redacted play types), `play.ts` (start/answer/finish client), `combatStore.ts` (Zustand phase machine: presenting → feedback → advance → victory/defeat, driven by server verdicts). Decision: Zustand phase machine over XState for M2 (spec-blessed pragmatic start); graduate later if relics/phases grow.
+- [x] **T3. Combat UI (student app)** — DONE. `components/Combat.tsx` (boss panel + animated HP bars, player HUD, question cards for all 6 types, feedback with explanation + source citation, victory/defeat screens) via Motion; `/play/[campaignId]` route; `JoinForm` on the landing. `next build` passes.
+- [x] **T4. Verify** — DONE. 20 backend tests (scoring units + play-flow API). Real-path live check: `X-Dev-Role` student auth, redacted game, start → correct answer (+10 dmg) → finish; teacher → /student = 403. Student app builds. (Dev auth shim `X-Dev-Role`; real Supabase auth in M3.)
 
 ## Done: M1.2 — RAG context + Docling ingestion
 
@@ -22,8 +22,8 @@ Small, committed increments so work survives a mid-session cutoff. Tick items as
 - [x] M1 — AI pipeline (ingestion → Structured Outputs → combat tuning → evals); verified live
 - [x] M1.1 — outline dedup + large-doc cap fixes; verified on real Korean PDF
 - [x] M1.2 — RAG context + Docling (parser config, chunk store, per-encounter retrieval, large-doc map step)
-- [ ] **M2 — play one game (student client: React+Motion+XState combat) — next**
-- [ ] M3 — LMS + dashboard (classes, assignments, analytics)
+- [x] M2 — play one game (student combat client + server-authoritative play API)
+- [ ] **M3 — LMS + dashboard (classes, assignments, analytics) — next**
 - [ ] M4 — polish + deploy (Vercel + Render + Supabase)
 
 ## Notes / constraints

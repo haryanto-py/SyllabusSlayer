@@ -1,0 +1,383 @@
+"use client";
+
+import Link from "next/link";
+import { AnimatePresence, motion } from "motion/react";
+import { useEffect, useState } from "react";
+
+import { useCombat } from "@/lib/combatStore";
+import type { PlayQuestion } from "@/lib/types";
+
+export default function Combat({ campaignId }: { campaignId: string }) {
+  const phase = useCombat((s) => s.phase);
+  const start = useCombat((s) => s.start);
+  const reset = useCombat((s) => s.reset);
+
+  useEffect(() => {
+    start(campaignId);
+    return () => reset();
+  }, [campaignId, start, reset]);
+
+  if (phase === "idle" || phase === "loading") return <Centered>⚔️ Summoning your campaign…</Centered>;
+  if (phase === "error") return <ErrorView />;
+  if (phase === "victory" || phase === "defeat") return <ResultScreen />;
+  return <Arena />;
+}
+
+function Centered({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex flex-1 items-center justify-center px-6 text-zinc-300">{children}</div>
+  );
+}
+
+function ErrorView() {
+  const error = useCombat((s) => s.error);
+  return (
+    <Centered>
+      <div className="max-w-md text-center">
+        <p className="text-rose-300">{error ?? "Something went wrong."}</p>
+        <Link href="/" className="mt-4 inline-block text-amber-400 hover:underline">
+          ← Back
+        </Link>
+      </div>
+    </Centered>
+  );
+}
+
+function HpBar({ value, max, color }: { value: number; max: number; color: string }) {
+  const pct = max > 0 ? Math.max(0, Math.min(100, (value / max) * 100)) : 0;
+  return (
+    <div className="h-3 w-full overflow-hidden rounded-full bg-zinc-800">
+      <motion.div
+        className={`h-full ${color}`}
+        animate={{ width: `${pct}%` }}
+        transition={{ type: "spring", stiffness: 120, damping: 20 }}
+      />
+    </div>
+  );
+}
+
+function Arena() {
+  const game = useCombat((s) => s.game);
+  const actIndex = useCombat((s) => s.actIndex);
+  const encounterIndex = useCombat((s) => s.encounterIndex);
+  const enemyHp = useCombat((s) => s.enemyHp);
+  const enemyMaxHp = useCombat((s) => s.enemyMaxHp);
+  const player = useCombat((s) => s.player);
+  const phase = useCombat((s) => s.phase);
+  const cleared = useCombat((s) => s.encountersCleared);
+  const total = useCombat((s) => s.totalEncounters());
+  const questionIndex = useCombat((s) => s.questionIndex);
+
+  const act = game?.acts[actIndex];
+  const enc = act?.encounters[encounterIndex];
+  if (!enc) return <Centered>…</Centered>;
+
+  return (
+    <div className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-5 px-5 py-8">
+      <div className="text-center text-xs uppercase tracking-widest text-zinc-500">
+        {act?.title} · Encounter {cleared + 1} / {total}
+      </div>
+
+      {/* Boss */}
+      <motion.div
+        key={enc.encounterId}
+        initial={{ opacity: 0, y: -8 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="rounded-2xl border border-rose-900/50 bg-gradient-to-b from-rose-950/40 to-zinc-900 p-5"
+      >
+        <div className="flex items-center justify-between">
+          <div>
+            <span className="rounded bg-rose-500/20 px-2 py-0.5 text-[10px] font-semibold uppercase text-rose-300">
+              {enc.kind}
+            </span>
+            <h2 className="mt-1 text-lg font-bold text-zinc-100">{enc.enemyName}</h2>
+            <p className="text-xs italic text-zinc-400">{enc.enemyFlavor}</p>
+          </div>
+          <div className="text-right text-xs text-zinc-400">
+            HP {enemyHp}/{enemyMaxHp}
+          </div>
+        </div>
+        <div className="mt-3">
+          <HpBar value={enemyHp} max={enemyMaxHp} color="bg-rose-500" />
+        </div>
+      </motion.div>
+
+      {/* Player HUD */}
+      <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4">
+        <div className="mb-2 flex items-center justify-between text-sm text-zinc-300">
+          <span>
+            ❤️ {player.hp}/{player.maxHp}
+          </span>
+          <span className="flex gap-3">
+            <span className="text-amber-300">🔥 streak {player.streak}</span>
+            <span>Lv {player.level}</span>
+            <span>XP {player.xp}</span>
+            <span>⚔️ {player.score}</span>
+          </span>
+        </div>
+        <HpBar value={player.hp} max={player.maxHp} color="bg-emerald-500" />
+      </div>
+
+      {/* Question / feedback */}
+      <AnimatePresence mode="wait">
+        {phase === "feedback" || !enc.questions[questionIndex] ? (
+          <Feedback key="fb" />
+        ) : (
+          <QuestionView
+            key={`q-${actIndex}-${encounterIndex}-${questionIndex}`}
+            question={enc.questions[questionIndex]}
+          />
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+function QuestionView({ question }: { question: PlayQuestion }) {
+  const submit = useCombat((s) => s.submit);
+  const submitting = useCombat((s) => s.submitting);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -8 }}
+      className="rounded-2xl border border-zinc-800 bg-zinc-900/80 p-5"
+    >
+      <div className="mb-1 flex gap-2 text-[10px] uppercase tracking-wide text-zinc-500">
+        <span>{question.questionType.replace("_", " ")}</span>
+        <span>· {question.bloomLevel}</span>
+        <span>· {question.difficulty}</span>
+      </div>
+      <p className="mb-4 text-base font-medium text-zinc-100">{question.prompt}</p>
+      <AnswerInput question={question} disabled={submitting} onSubmit={submit} />
+      {question.hint && <p className="mt-3 text-xs text-zinc-500">💡 {question.hint}</p>}
+    </motion.div>
+  );
+}
+
+function AnswerInput({
+  question,
+  disabled,
+  onSubmit,
+}: {
+  question: PlayQuestion;
+  disabled: boolean;
+  onSubmit: (answer: unknown) => void;
+}) {
+  const [multi, setMulti] = useState<string[]>([]);
+  const [text, setText] = useState("");
+  const [order, setOrder] = useState<string[]>([]);
+  const [pairs, setPairs] = useState<Record<string, string>>({});
+  const btn =
+    "w-full rounded-lg border border-zinc-700 bg-zinc-800/70 px-4 py-3 text-left text-zinc-100 transition-colors hover:border-amber-500/60 hover:bg-zinc-800 disabled:opacity-50";
+
+  switch (question.questionType) {
+    case "multiple_choice":
+      return (
+        <div className="flex flex-col gap-2">
+          {(question.options ?? []).map((o) => (
+            <button key={o.optionId} disabled={disabled} className={btn} onClick={() => onSubmit(o.optionId)}>
+              {o.text}
+            </button>
+          ))}
+        </div>
+      );
+    case "true_false":
+      return (
+        <div className="flex gap-3">
+          <button disabled={disabled} className={btn} onClick={() => onSubmit(true)}>
+            ✓ True
+          </button>
+          <button disabled={disabled} className={btn} onClick={() => onSubmit(false)}>
+            ✗ False
+          </button>
+        </div>
+      );
+    case "multi_select":
+      return (
+        <div className="flex flex-col gap-2">
+          {(question.options ?? []).map((o) => {
+            const on = multi.includes(o.optionId);
+            return (
+              <button
+                key={o.optionId}
+                disabled={disabled}
+                className={`${btn} ${on ? "border-amber-500 bg-amber-500/10" : ""}`}
+                onClick={() => setMulti((m) => (on ? m.filter((x) => x !== o.optionId) : [...m, o.optionId]))}
+              >
+                {on ? "☑ " : "☐ "}
+                {o.text}
+              </button>
+            );
+          })}
+          <SubmitBtn disabled={disabled || multi.length === 0} onClick={() => onSubmit(multi)} />
+        </div>
+      );
+    case "short_answer":
+      return (
+        <div className="flex gap-2">
+          <input
+            value={text}
+            disabled={disabled}
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && text.trim() && onSubmit(text.trim())}
+            placeholder="Type your answer…"
+            className="flex-1 rounded-lg border border-zinc-700 bg-zinc-800/70 px-4 py-3 text-zinc-100"
+          />
+          <SubmitBtn disabled={disabled || !text.trim()} onClick={() => onSubmit(text.trim())} />
+        </div>
+      );
+    case "ordering":
+      return (
+        <div className="flex flex-col gap-2">
+          {(question.orderedItems ?? []).map((it) => {
+            const pos = order.indexOf(it.itemId);
+            return (
+              <button
+                key={it.itemId}
+                disabled={disabled || pos !== -1}
+                className={`${btn} ${pos !== -1 ? "border-amber-500 bg-amber-500/10" : ""}`}
+                onClick={() => setOrder((o) => [...o, it.itemId])}
+              >
+                {pos !== -1 ? `${pos + 1}. ` : "• "}
+                {it.text}
+              </button>
+            );
+          })}
+          <div className="flex gap-2">
+            <button
+              disabled={disabled || order.length === 0}
+              className="rounded-lg border border-zinc-700 px-3 py-2 text-sm text-zinc-400 disabled:opacity-40"
+              onClick={() => setOrder([])}
+            >
+              Reset
+            </button>
+            <SubmitBtn
+              disabled={disabled || order.length !== (question.orderedItems ?? []).length}
+              onClick={() => onSubmit(order)}
+            />
+          </div>
+        </div>
+      );
+    case "matching":
+      return (
+        <div className="flex flex-col gap-2">
+          {(question.matchLeft ?? []).map((l) => (
+            <div key={l.pairId} className="flex items-center gap-2">
+              <span className="flex-1 text-zinc-200">{l.left}</span>
+              <select
+                disabled={disabled}
+                className="rounded-lg border border-zinc-700 bg-zinc-800 px-2 py-2 text-zinc-100"
+                value={pairs[l.pairId] ?? ""}
+                onChange={(e) => setPairs((p) => ({ ...p, [l.pairId]: e.target.value }))}
+              >
+                <option value="">— pick —</option>
+                {(question.matchRight ?? []).map((r) => (
+                  <option key={r} value={r}>
+                    {r}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ))}
+          <SubmitBtn
+            disabled={disabled || Object.keys(pairs).length !== (question.matchLeft ?? []).length}
+            onClick={() => onSubmit(pairs)}
+          />
+        </div>
+      );
+    default:
+      return <p className="text-sm text-zinc-500">Unsupported question type.</p>;
+  }
+}
+
+function SubmitBtn({ disabled, onClick }: { disabled: boolean; onClick: () => void }) {
+  return (
+    <button
+      disabled={disabled}
+      onClick={onClick}
+      className="rounded-lg bg-amber-500 px-5 py-3 font-semibold text-zinc-950 transition-opacity hover:bg-amber-400 disabled:opacity-40"
+    >
+      Attack ⚔️
+    </button>
+  );
+}
+
+function Feedback() {
+  const result = useCombat((s) => s.lastResult);
+  const advance = useCombat((s) => s.advance);
+  if (!result) return null;
+  return (
+    <motion.div
+      initial={{ opacity: 0, scale: 0.97 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0 }}
+      className={`rounded-2xl border p-5 ${
+        result.isCorrect ? "border-emerald-700/60 bg-emerald-950/30" : "border-rose-800/60 bg-rose-950/30"
+      }`}
+    >
+      <div className="flex items-center justify-between">
+        <span className={`font-bold ${result.isCorrect ? "text-emerald-300" : "text-rose-300"}`}>
+          {result.isCorrect ? `Hit! −${result.damage} enemy HP` : "Missed — you took damage"}
+        </span>
+        {result.isCorrect && result.streak > 1 && (
+          <span className="text-amber-300">🔥 ×{result.streak} streak</span>
+        )}
+      </div>
+      {result.explanation && <p className="mt-2 text-sm text-zinc-300">{result.explanation}</p>}
+      {result.sourceQuote && (
+        <p className="mt-2 border-l-2 border-zinc-700 pl-3 text-xs italic text-zinc-500">
+          “{result.sourceQuote}”{result.sourcePage ? ` (p.${result.sourcePage})` : ""}
+        </p>
+      )}
+      <button
+        onClick={advance}
+        className="mt-4 w-full rounded-lg bg-zinc-100 px-5 py-3 font-semibold text-zinc-900 hover:bg-white"
+      >
+        Continue →
+      </button>
+    </motion.div>
+  );
+}
+
+function ResultScreen() {
+  const phase = useCombat((s) => s.phase);
+  const player = useCombat((s) => s.player);
+  const game = useCombat((s) => s.game);
+  const start = useCombat((s) => s.start);
+  const win = phase === "victory";
+  return (
+    <Centered>
+      <motion.div
+        initial={{ opacity: 0, scale: 0.9 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="max-w-md text-center"
+      >
+        <div className="text-5xl">{win ? "🏆" : "💀"}</div>
+        <h1 className={`mt-3 text-3xl font-extrabold ${win ? "text-amber-300" : "text-rose-300"}`}>
+          {win ? "Campaign Cleared!" : "Defeated"}
+        </h1>
+        <p className="mt-4 text-zinc-300">
+          Score {player.score} · XP {player.xp} · Level {player.level} · HP {player.hp}
+        </p>
+        <div className="mt-6 flex justify-center gap-3">
+          {game && (
+            <button
+              onClick={() => start(game.campaignId)}
+              className="rounded-lg bg-amber-500 px-5 py-3 font-semibold text-zinc-950 hover:bg-amber-400"
+            >
+              Play again
+            </button>
+          )}
+          <Link
+            href="/"
+            className="rounded-lg border border-zinc-700 px-5 py-3 text-zinc-200 hover:bg-zinc-800"
+          >
+            Home
+          </Link>
+        </div>
+      </motion.div>
+    </Centered>
+  );
+}
