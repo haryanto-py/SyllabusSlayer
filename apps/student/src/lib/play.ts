@@ -35,3 +35,23 @@ export function finishPlay(sessionId: string): Promise<FinishResult> {
     headers: DEV_HEADERS,
   });
 }
+
+export function joinClass(joinCode: string): Promise<{ id: string; name: string }> {
+  return apiFetch(`/student/classes/join`, {
+    method: "POST",
+    headers: DEV_HEADERS,
+    body: JSON.stringify({ join_code: joinCode }),
+  });
+}
+
+export interface AssignmentItem {
+  assignment_id: string;
+  campaign_id: string;
+  title: string;
+  class_name: string;
+  due_at: string | null;
+}
+
+export function listAssignments(): Promise<AssignmentItem[]> {
+  return apiFetch<AssignmentItem[]>(`/student/assignments`, { headers: DEV_HEADERS });
+}

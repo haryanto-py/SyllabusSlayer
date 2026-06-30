@@ -10,7 +10,7 @@ Auth runs on the dev shim for now; real Supabase auth is T6 (needs the user's Su
 - [x] **T2. Assignments (backend)** — DONE. `POST/GET /teacher/classes/{id}/assignments`; `GET /student/assignments`; play `start` accepts `assignment_id`.
 - [x] **T3. Teacher review/edit (backend)** — DONE. `GET /teacher/campaigns` (list); `PUT /teacher/campaigns/{id}/questions/{qid}` (schema-validated edit + recompute encounter combat); `POST /teacher/campaigns/{id}/publish`. *(UI in T5.)*
 - [x] **T4. Dashboard analytics (backend)** — DONE. `services/analytics.py` + `GET /teacher/campaigns/{id}/analytics?class_id=` → per-student, per-topic mastery, item p-values, completion summary. *(UI in T5.)*
-- [ ] **T5. App pages** — teacher: classes / roster / assign / review / dashboard; student: join-by-code + assigned-games list.
+- [x] **T5. App pages** — DONE. Teacher app: `/classes` (list+create), `/classes/[id]` (roster, assign, inline dashboard), `/campaigns` (list), `/campaigns/[id]` (review: edit prompt/options/correct/explanation + publish). Student app: join-by-code + assigned-games list (`MyGames`). Both apps `next build` clean.
 - [ ] **T6. (deferred) Real Supabase auth** — replace the dev shim; needs a Supabase project + creds.
 
 ## Done: M2 — play one game (student client) ✅
@@ -34,8 +34,8 @@ Auth runs on the dev shim for now; real Supabase auth is T6 (needs the user's Su
 - [x] M1.1 — outline dedup + large-doc cap fixes; verified on real Korean PDF
 - [x] M1.2 — RAG context + Docling (parser config, chunk store, per-encounter retrieval, large-doc map step)
 - [x] M2 — play one game (student combat client + server-authoritative play API)
-- [ ] **M3 — LMS + dashboard (classes, assignments, analytics) — next**
-- [ ] M4 — polish + deploy (Vercel + Render + Supabase)
+- [x] M3 — LMS + dashboard (classes / enroll / assign / review / analytics + app pages; T6 real Supabase auth deferred — needs your Supabase project)
+- [ ] **M4 — polish + deploy (Vercel + Render + Supabase) — next**
 
 ## Notes / constraints
 - OpenAI budget ~$5 total; ~$0.15 spent. Use `gpt-5.4-nano` (outline) + `gpt-5.4-mini` (questions); avoid `gpt-5.4`/`5.5`/`pro`. `gpt-4o-mini` available as a stable fallback (not needed so far).

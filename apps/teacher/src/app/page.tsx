@@ -1,6 +1,4 @@
-import { SCHEMA_VERSION } from "@syllabusslayer/shared";
-
-const STEPS = ["Upload", "Review & edit", "Assign", "Dashboard"];
+import Link from "next/link";
 
 export default function Home() {
   return (
@@ -9,37 +7,29 @@ export default function Home() {
         <span className="mb-6 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-3 py-1 text-xs font-medium tracking-wide text-emerald-300">
           🧑‍🏫 Teacher
         </span>
-
         <h1 className="text-4xl font-bold tracking-tight sm:text-5xl">
           SyllabusSlayer <span className="text-emerald-400">Teacher</span>
         </h1>
-
         <p className="mt-5 max-w-lg text-lg leading-8 text-zinc-400">
-          Turn your syllabus into a roguelike. Upload resources, review AI-generated
-          questions, assign to a class, and monitor mastery.
+          Review AI-generated questions, assign campaigns to a class, and monitor mastery.
         </p>
-
-        <div className="mt-8 flex flex-wrap items-center justify-center gap-3 text-sm">
-          {STEPS.map((step, i) => (
-            <span
-              key={step}
-              className="rounded-full border border-zinc-800 bg-zinc-900 px-4 py-2 text-zinc-300"
-            >
-              {i + 1}. {step}
-            </span>
-          ))}
+        <div className="mt-8 flex flex-wrap justify-center gap-3">
+          <Link
+            href="/classes"
+            className="rounded-lg bg-emerald-500 px-6 py-3 font-semibold text-zinc-950 hover:bg-emerald-400"
+          >
+            My classes
+          </Link>
+          <Link
+            href="/campaigns"
+            className="rounded-lg border border-zinc-700 px-6 py-3 font-semibold text-zinc-200 hover:bg-zinc-800"
+          >
+            Campaigns
+          </Link>
         </div>
-
-        <button
-          type="button"
-          disabled
-          className="mt-8 rounded-lg bg-emerald-500/80 px-6 py-3 font-semibold text-zinc-950"
-        >
-          Sign in
-        </button>
-        <p className="mt-3 text-xs text-zinc-600">Auth + workflow arrive in M3.</p>
-
-        <p className="mt-12 text-xs text-zinc-700">schema v{SCHEMA_VERSION} · teacher app</p>
+        <p className="mt-3 text-xs text-zinc-600">
+          Dev mode (no login yet) — Supabase auth arrives in M3-T6.
+        </p>
       </main>
     </div>
   );

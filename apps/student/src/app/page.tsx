@@ -1,6 +1,7 @@
 import { SCHEMA_VERSION } from "@syllabusslayer/shared";
 
 import JoinForm from "@/components/JoinForm";
+import MyGames from "@/components/MyGames";
 
 export default function Home() {
   return (
@@ -19,10 +20,14 @@ export default function Home() {
           bonus damage, and conquer the course.
         </p>
 
-        <JoinForm />
-        <p className="mt-3 text-xs text-zinc-600">
-          Enter a campaign id to start a run. (Join-by-class-code arrives in M3.)
-        </p>
+        <MyGames />
+
+        <details className="mt-6 w-full max-w-md text-left">
+          <summary className="cursor-pointer text-xs text-zinc-600">
+            Dev: play a campaign by id
+          </summary>
+          <JoinForm />
+        </details>
 
         <p className="mt-12 text-xs text-zinc-700">schema v{SCHEMA_VERSION} · student app</p>
       </main>
