@@ -8,16 +8,20 @@ import pytest
 from pydantic import ValidationError
 
 from app.schemas.game import (
+    ActStub,
     BloomLevel,
+    CampaignOutline,
     CombatConfig,
     Difficulty,
     EncounterKind,
+    EncounterStub,
     Option,
     Question,
     QuestionType,
 )
 from app.services import combat_tuning, evals
 from app.services.chunking import chunk_document, count_tokens, needs_rag
+from app.services.generation import dedupe_outline
 from app.services.ingestion import build_section_tree, flatten, parse_markdown
 
 FIXTURE = Path(__file__).parent / "fixtures" / "cell_biology.md"
@@ -134,6 +138,30 @@ def test_game_eval_summary():
     s = game_eval.summary()
     assert s["total_questions"] == 1
     assert s["grounded_pct"] == 100.0
+
+
+# --- outline dedup ---------------------------------------------------------- #
+def _enc(eid: str, sub: str) -> EncounterStub:
+    return EncounterStub(
+        encounterId=eid, order=1, kind=EncounterKind.minion, title=sub,
+        enemyName="E", enemyFlavor="f", subTopic=sub, targetQuestionCount=2,
+    )
+
+
+def test_dedupe_outline_removes_cross_act_duplicates():
+    outline = CampaignOutline(
+        schemaVersion="1.0.0", campaignId="c", title="t", description="d", sourceDocumentId="doc",
+        acts=[
+            ActStub(actId="a1", order=1, title="Act 1", syllabusTopic="Organelles", summary="s",
+                    encounters=[_enc("e1", "Mitochondria"), _enc("e2", "Nucleus")]),
+            ActStub(actId="a2", order=2, title="Act 2", syllabusTopic="Respiration", summary="s",
+                    encounters=[_enc("e3", "mitochondria "), _enc("e4", "Glycolysis")]),
+        ],
+    )
+    deduped = dedupe_outline(outline)
+    subs = [e.subTopic for a in deduped.acts for e in a.encounters]
+    assert subs == ["Mitochondria", "Nucleus", "Glycolysis"]  # normalized duplicate dropped
+    assert deduped.acts[1].encounters[0].order == 1  # orders renumbered in the kept act
 
 
 # --- schema validator ------------------------------------------------------- #

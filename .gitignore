@@ -31,3 +31,9 @@ Thumbs.db
 
 # --- uploads / generated ---
 backend/uploads/
+
+# --- copyrighted test material (keep local; do not publish) ---
+backend/tests/fixtures/*.pdf
+backend/tests/fixtures/*.docx
+backend/tests/fixtures/*.pptx
+docs/examples/level_1_lessons_game.json

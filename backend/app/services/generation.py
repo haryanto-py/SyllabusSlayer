@@ -12,6 +12,8 @@ carry strict-mode-friendly schemas (extra='forbid', all fields required, optiona
 
 from __future__ import annotations
 
+import re
+
 from openai import OpenAI
 
 from app.core.config import settings
@@ -24,7 +26,11 @@ OUTLINE_INSTRUCTIONS = (
     "boss for the act's most important sub-topic. Give vivid but tasteful enemy names/flavor tied to "
     "the topic. Do NOT write questions yet. Do NOT invent facts beyond the source. Set schemaVersion "
     "to '1.0.0' and use the provided sourceDocumentId. Give every act/encounter a stable, unique, "
-    "slug-like id. targetQuestionCount should be 2-4 per encounter."
+    "slug-like id. targetQuestionCount should be 2-4 per encounter. "
+    "CRITICAL: every sub-topic maps to EXACTLY ONE encounter — never repeat a sub-topic, its "
+    "title, or its content across encounters or acts. Acts must be mutually exclusive and the "
+    "encounters within an act must cover distinct sub-topics. Create only as many acts/encounters "
+    "as the document's distinct sub-topics warrant; do NOT pad or duplicate to lengthen it."
 )
 
 QUESTION_INSTRUCTIONS = (
@@ -75,8 +81,10 @@ def _parse(model: str, instructions: str, user: str, text_format, max_output_tok
 
 def generate_outline(
     *, source_document_id: str, doc_markdown: str, model: str | None = None,
-    max_output_tokens: int = 4000,
+    max_output_tokens: int = 16000,
 ) -> tuple[CampaignOutline, dict]:
+    # A whole-document outline (many acts) can be large; cap high to avoid truncation.
+    # Billing is per token actually produced, so the headroom is free.
     user = f"sourceDocumentId: {source_document_id}\n\nSOURCE MATERIAL (Markdown):\n\n{doc_markdown}"
     return _parse(
         model or settings.openai_model_nano, OUTLINE_INSTRUCTIONS, user,
@@ -84,9 +92,41 @@ def generate_outline(
     )
 
 
+def _norm_topic(s: str) -> str:
+    return re.sub(r"\s+", " ", (s or "").lower()).strip()
+
+
+def dedupe_outline(outline: CampaignOutline) -> CampaignOutline:
+    """Drop encounters whose sub-topic (or title) already appeared anywhere in the campaign,
+    remove emptied acts, and renumber orders.
+
+    A deterministic safety net on top of the prompt's non-overlap rule: topics can never
+    repeat across acts/encounters even if the outline model slips.
+    """
+    seen: set[str] = set()
+    kept_acts = []
+    for act in outline.acts:
+        kept_encs = []
+        for enc in act.encounters:
+            key = _norm_topic(enc.subTopic) or _norm_topic(enc.title)
+            if not key or key in seen:
+                continue
+            seen.add(key)
+            kept_encs.append(enc)
+        if kept_encs:
+            for i, enc in enumerate(kept_encs, start=1):
+                enc.order = i
+            act.encounters = kept_encs
+            kept_acts.append(act)
+    for i, act in enumerate(kept_acts, start=1):
+        act.order = i
+    outline.acts = kept_acts
+    return outline
+
+
 def generate_questions(
     *, encounter: EncounterStub, context_text: str, chunk_ids: list[str] | None = None,
-    model: str | None = None, max_output_tokens: int = 4000, max_retries: int = 1,
+    model: str | None = None, max_output_tokens: int = 6000, max_retries: int = 1,
 ) -> tuple[QuestionBatch, dict]:
     model = model or settings.openai_model_mini
     chunk_ids = chunk_ids or [f"{encounter.encounterId}::ctx"]

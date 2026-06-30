@@ -17,6 +17,12 @@ PRICING: dict[str, tuple[float, float]] = {
     "gpt-5.4-mini": (0.75, 4.50),
     "gpt-5.4-nano": (0.20, 1.25),
     "gpt-5.5": (5.00, 30.00),
+    # GPT-4 family fallbacks (more stable instruction-following per the user's experience)
+    "gpt-4o": (2.50, 10.00),
+    "gpt-4o-mini": (0.15, 0.60),
+    "gpt-4.1": (2.00, 8.00),
+    "gpt-4.1-mini": (0.40, 1.60),
+    "gpt-4.1-nano": (0.10, 0.40),
 }
 
 
@@ -55,7 +61,7 @@ def _estimate_cost(usages: list[dict]) -> float:
 def build_game(
     *, parsed: ParsedDocument, source_document_id: str, title: str | None = None,
     cfg: CombatConfig | None = None, outline_model: str | None = None,
-    question_model: str | None = None,
+    question_model: str | None = None, max_encounters: int | None = None,
 ) -> dict:
     cfg = cfg or combat_tuning.default_combat_config()
     usages: list[dict] = []
@@ -66,6 +72,16 @@ def build_game(
     usages.append(u)
     if title:
         outline.title = title
+
+    # Remove any duplicated sub-topics the outline model may have produced, then optionally
+    # cap the encounter count (used to bound cost when testing against large documents).
+    outline = generation.dedupe_outline(outline)
+    if max_encounters is not None:
+        remaining = max_encounters
+        for act in outline.acts:
+            act.encounters = act.encounters[: max(0, remaining)]
+            remaining -= len(act.encounters)
+        outline.acts = [a for a in outline.acts if a.encounters]
 
     encounter_evals = []
     acts_out = []
