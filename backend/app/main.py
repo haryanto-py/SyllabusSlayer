@@ -14,9 +14,9 @@ from app.routers import health, student, teacher
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Dev/SQLite: create tables on startup. Prod uses Alembic migrations.
-    if settings.database_url.startswith("sqlite"):
-        init_db()
+    # Create any missing tables on startup (idempotent) — works for SQLite (dev) and
+    # Postgres (prod). Introduce Alembic migrations later for richer schema changes.
+    init_db()
     yield
 
 

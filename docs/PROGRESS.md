@@ -2,6 +2,12 @@
 
 Small, committed increments so work survives a mid-session cutoff. Tick items as they land; each ticked item = a commit.
 
+## Current: M4 — polish + deploy
+
+- [ ] **T1. Backend prod-readiness** — Dockerfile + .dockerignore; MarkItDown into base deps (prod parser, no heavy Docling); create tables on Postgres on startup; bind `$PORT`; CORS via env; `ENV=prod` disables the dev shim. `render.yaml` blueprint.
+- [ ] **T2. Deploy docs** — `DEPLOY.md` (Supabase DB URL + pgvector note, Render backend, Vercel × 2 apps, all env vars) + README polish + `.env.example` prod vars.
+- [ ] **T3. Verify** — local `docker build` of the backend; both apps build; final smoke.
+
 ## Done: M3 — LMS + dashboard ✅
 
 Real Supabase auth (T6) is wired; the dev `X-Dev-Role` shim remains only as a no-token fallback.

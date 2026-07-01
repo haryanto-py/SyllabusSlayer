@@ -18,14 +18,15 @@ dependencies = [
     # Postgres / pgvector (used in prod against Supabase; harmless locally)
     "psycopg[binary]>=3.2",
     "pgvector>=0.3",
+    # Default document parser (light, pure-Python) — kept in base so prod can parse uploads.
+    "markitdown[pdf,docx,pptx]>=0.0.1",
 ]
 
 [project.optional-dependencies]
-# Heavy parsing stack (Docling pulls in CPU torch etc.) — install when working on ingestion:
-#   uv sync --extra ingestion
-ingestion = [
+# Docling gives richer structure but pulls CPU torch (~heavy) and OOMs on large PDFs on
+# small machines; MarkItDown (base dep) is the default parser. Optional:  uv sync --extra docling
+docling = [
     "docling>=2.0",
-    "markitdown[pdf,docx,pptx]>=0.0.1",
 ]
 dev = [
     "ruff>=0.6",

@@ -1,0 +1,32 @@
+# Render Blueprint for the SyllabusSlayer backend (FastAPI).
+# The two Next.js apps deploy on Vercel (see docs/DEPLOY.md). Secret values are set in
+# the Render dashboard (sync: false); model ids are safe defaults.
+services:
+  - type: web
+    name: syllabusslayer-api
+    runtime: docker
+    dockerfilePath: backend/Dockerfile
+    dockerContext: backend
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: ENV
+        value: prod
+      - key: DATABASE_URL # Supabase Postgres connection string (postgresql+psycopg://...)
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_JWKS_URL
+        sync: false
+      - key: CORS_ORIGINS # JSON list of the deployed Vercel app URLs
+        sync: false
+      - key: OPENAI_MODEL_HEAVY
+        value: gpt-5.4
+      - key: OPENAI_MODEL_MINI
+        value: gpt-5.4-mini
+      - key: OPENAI_MODEL_NANO
+        value: gpt-5.4-nano
+      - key: OPENAI_EMBEDDING_MODEL
+        value: text-embedding-3-small
