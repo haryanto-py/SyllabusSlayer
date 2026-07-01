@@ -14,8 +14,8 @@ Next.js (Vercel)  ──HTTPS+JWT──▶  FastAPI (Render)  ──▶  OpenAI 
 
 - **Game client:** plain React + Tailwind + **Motion** + **XState** + **Zustand** (no canvas engine — combat is turn-based/UI-driven).
 - **Game data:** the LLM generates the *pedagogical* layer via **OpenAI Structured Outputs** (a flat discriminated-union `Question`, generated outline → per-encounter batches); the backend computes the *combat tuning* (HP/damage/XP) deterministically.
-- **Ingestion:** **Docling** (MIT) → Markdown + section tree; **RAG** (text-embedding-3-small + **pgvector**) gated behind a `tiktoken` size check.
-- **Infra (decided):** Supabase (DB+Auth+Storage) · Render (API) · RAG in v1.
+- **Ingestion:** **MarkItDown** (default, light) / Docling (optional) → Markdown + section tree; **retrieval** (text-embedding-3-small) supplies focused per-encounter context, gated by a `tiktoken` size check.
+- **Auth:** Supabase email+password; tokens verified server-side via **JWKS**. **Infra:** Supabase Postgres · Render (API) · Vercel (apps).
 
 📄 **Full build spec:** [`docs/BUILD-SPEC.md`](docs/BUILD-SPEC.md) · raw research: [`docs/research/recovered-findings.json`](docs/research/recovered-findings.json)
 
@@ -48,7 +48,7 @@ Requires Python 3.12 and [uv](https://docs.astral.sh/uv/). On this machine use `
 ```bash
 cd backend
 cp .env.example .env          # defaults run on SQLite, no secrets needed
-uv sync                       # base deps (add --extra ingestion for Docling later)
+uv sync                       # base deps incl. MarkItDown parser (add --extra docling for Docling)
 uv run uvicorn app.main:app --reload
 # → http://localhost:8000/docs   ·   GET /health
 ```
@@ -61,16 +61,14 @@ npm run dev:teacher      # teacher app  → http://localhost:3000
 npm run dev:student      # student app  → http://localhost:3001
 # build both: npm run build
 ```
-Copy `apps/teacher/.env.local.example` and `apps/student/.env.local.example` → `.env.local` in each.
+Each app needs a git-ignored `.env.local` with `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, and `NEXT_PUBLIC_API_URL`. Sign-up / login is required (Supabase email + password).
 
 ## Status
 
-- ✅ **M0 — Scaffold:** npm-workspaces monorepo (separate teacher/student Next.js apps + shared package), backend skeleton with teacher/student RBAC routers, data model, game-content schema (Pydantic + Zod mirror), health endpoint. Both apps build; backend smoke-tested.
-- ✅ **M1 — Ingestion + generation:** document ingestion (Docling/MarkItDown + markdown) → section tree, RAG-gate (tiktoken) + embeddings/cosine retrieval, OpenAI Structured-Outputs pipeline (`gpt-5.4-nano` outline + `gpt-5.4-mini` questions via Responses API), deterministic combat tuning, grounding/quality eval harness, and the teacher API (`/documents`, `/campaigns/generate`, `/campaigns/{id}`). **Verified live:** a 20-question cell-biology game, 100% source-grounded, ~$0.025/game; 12 tests pass. Sample output: [`docs/examples/cell_biology_game.json`](docs/examples/cell_biology_game.json).
-- ⬜ **M2 — Play one game** · ⬜ **M3 — LMS + dashboard** · ⬜ **M4 — Polish + deploy**
+- ✅ **M0** scaffold (monorepo + backend) · ✅ **M1** AI generation pipeline (ingestion → Structured Outputs → combat tuning → evals; ~$0.025/game, source-grounded) · ✅ **M1.2** RAG per-encounter context · ✅ **M2** playable student combat (server-authoritative scoring) · ✅ **M3** LMS — classes, enrollment, assignments, review/edit, dashboard analytics + **Supabase auth (JWKS)** · 🔧 **M4** polish + deploy (in progress).
+- **Deploy:** [`docs/DEPLOY.md`](docs/DEPLOY.md) — Vercel (2 apps) + Render (`render.yaml` + `backend/Dockerfile`) + Supabase.
+- Run the live generation pipeline: `cd backend && uv run python scripts/m1_demo.py` (needs `OPENAI_API_KEY` in the root `.env`).
 
-Run the live pipeline: `cd backend && uv run python scripts/m1_demo.py` (needs `OPENAI_API_KEY` in the root `.env`, and `uv sync --extra ingestion` for PDF/DOCX/PPTX).
-
-See the roadmap in [`docs/BUILD-SPEC.md`](docs/BUILD-SPEC.md) §9.
+Roadmap + progress: [`docs/BUILD-SPEC.md`](docs/BUILD-SPEC.md) §9 and [`docs/PROGRESS.md`](docs/PROGRESS.md).
 
 > ⚠️ OpenAI model ids/prices and host free-tiers in the spec are research-current (mid-2026) — re-verify before committing budget. Model ids are pinned in `backend/.env`.

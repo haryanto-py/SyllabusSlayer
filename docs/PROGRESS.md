@@ -2,11 +2,11 @@
 
 Small, committed increments so work survives a mid-session cutoff. Tick items as they land; each ticked item = a commit.
 
-## Current: M4 — polish + deploy
+## Done: M4 — polish + deploy ✅  (deploy-ready — live deploy is your Render/Vercel step; see docs/DEPLOY.md)
 
-- [ ] **T1. Backend prod-readiness** — Dockerfile + .dockerignore; MarkItDown into base deps (prod parser, no heavy Docling); create tables on Postgres on startup; bind `$PORT`; CORS via env; `ENV=prod` disables the dev shim. `render.yaml` blueprint.
-- [ ] **T2. Deploy docs** — `DEPLOY.md` (Supabase DB URL + pgvector note, Render backend, Vercel × 2 apps, all env vars) + README polish + `.env.example` prod vars.
-- [ ] **T3. Verify** — local `docker build` of the backend; both apps build; final smoke.
+- [x] **T1. Backend prod-readiness** — DONE. `backend/Dockerfile` + `.dockerignore`; MarkItDown in base deps (Docling now `--extra docling`); tables created on Postgres at startup; binds `$PORT`; CORS via env; `ENV=prod` disables the dev shim. `render.yaml` blueprint.
+- [x] **T2. Deploy docs** — DONE. `docs/DEPLOY.md` (Supabase Postgres URL + auth URLs, Render blueprint, Vercel × 2 apps, all env vars, smoke test) + README polish.
+- [x] **T3. Verify** — 22 backend tests pass, ruff clean, both apps `next build` clean. *(Local `docker build` not run — Docker Desktop down; Render builds the image.)*
 
 ## Done: M3 — LMS + dashboard ✅
 
@@ -41,7 +41,7 @@ Real Supabase auth (T6) is wired; the dev `X-Dev-Role` shim remains only as a no
 - [x] M1.2 — RAG context + Docling (parser config, chunk store, per-encounter retrieval, large-doc map step)
 - [x] M2 — play one game (student combat client + server-authoritative play API)
 - [x] M3 — LMS + dashboard (classes / enroll / assign / review / analytics + app pages + real Supabase auth via JWKS)
-- [ ] **M4 — polish + deploy (Vercel + Render + Supabase) — next**
+- [x] M4 — polish + deploy (Docker + render.yaml + DEPLOY.md; deploy-ready — live deploy is the user's dashboard step)
 
 ## Notes / constraints
 - OpenAI budget ~$5 total; ~$0.15 spent. Use `gpt-5.4-nano` (outline) + `gpt-5.4-mini` (questions); avoid `gpt-5.4`/`5.5`/`pro`. `gpt-4o-mini` available as a stable fallback (not needed so far).
