@@ -28,8 +28,11 @@ class Settings(BaseSettings):
 
     # --- Supabase (auth + storage) ---
     supabase_url: str | None = None
-    supabase_jwt_secret: str | None = None  # used to verify auth JWTs (HS256)
-    supabase_service_key: str | None = None  # server-side storage/admin ops
+    supabase_jwt_secret: str | None = None  # legacy HS256 shared secret
+    supabase_jwks_url: str | None = None  # new asymmetric verification (JWKS endpoint)
+    supabase_publishable_key: str | None = None  # client-safe key (frontend)
+    supabase_secret_key: str | None = None  # server-side admin key
+    supabase_service_key: str | None = None  # legacy service_role key
     supabase_storage_bucket: str = "uploads"
 
     # --- OpenAI (model ids are pinned here; RE-VERIFY against the pricing page) ---
