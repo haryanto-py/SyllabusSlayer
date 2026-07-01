@@ -9,6 +9,7 @@
     ".": "./src/index.ts",
     "./gameSchema": "./src/gameSchema.ts",
     "./api": "./src/api.ts",
+    "./auth": "./src/auth.ts",
     "./supabaseClient": "./src/supabaseClient.ts"
   },
   "dependencies": {

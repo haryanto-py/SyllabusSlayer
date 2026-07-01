@@ -2,16 +2,16 @@
 
 Small, committed increments so work survives a mid-session cutoff. Tick items as they land; each ticked item = a commit.
 
-## Current: M3 — LMS + dashboard
+## Done: M3 — LMS + dashboard ✅
 
-Auth runs on the dev shim for now; real Supabase auth is T6 (needs the user's Supabase project).
+Real Supabase auth (T6) is wired; the dev `X-Dev-Role` shim remains only as a no-token fallback.
 
 - [x] **T1. Classes + enrollment (backend)** — DONE. Teacher: `POST/GET /teacher/classes`, `GET /teacher/classes/{id}` (roster); student: `POST /student/classes/join` (by code, idempotent), `GET /student/classes`. Unambiguous 6-char join codes. Dev shim extended with `X-Dev-User` (multi-user sim); DRYed user upsert into `services/users.py`. 21 tests pass.
 - [x] **T2. Assignments (backend)** — DONE. `POST/GET /teacher/classes/{id}/assignments`; `GET /student/assignments`; play `start` accepts `assignment_id`.
 - [x] **T3. Teacher review/edit (backend)** — DONE. `GET /teacher/campaigns` (list); `PUT /teacher/campaigns/{id}/questions/{qid}` (schema-validated edit + recompute encounter combat); `POST /teacher/campaigns/{id}/publish`. *(UI in T5.)*
 - [x] **T4. Dashboard analytics (backend)** — DONE. `services/analytics.py` + `GET /teacher/campaigns/{id}/analytics?class_id=` → per-student, per-topic mastery, item p-values, completion summary. *(UI in T5.)*
 - [x] **T5. App pages** — DONE. Teacher app: `/classes` (list+create), `/classes/[id]` (roster, assign, inline dashboard), `/campaigns` (list), `/campaigns/[id]` (review: edit prompt/options/correct/explanation + publish). Student app: join-by-code + assigned-games list (`MyGames`). Both apps `next build` clean.
-- [ ] **T6. (deferred) Real Supabase auth** — replace the dev shim; needs a Supabase project + creds.
+- [x] **T6. Real Supabase auth** — DONE. Backend verifies Supabase JWTs via **JWKS** (ES256/RS256), role from `user_metadata`; dev shim is now only a no-token fallback. Frontend: `AuthGate` (email+password login/signup, role set per app) + `authHeaders` attaches the token to every API call. Both apps build. *(Live browser login is the user's final check; may require disabling "Confirm email" in Supabase for a frictionless demo.)*
 
 ## Done: M2 — play one game (student client) ✅
 
@@ -34,7 +34,7 @@ Auth runs on the dev shim for now; real Supabase auth is T6 (needs the user's Su
 - [x] M1.1 — outline dedup + large-doc cap fixes; verified on real Korean PDF
 - [x] M1.2 — RAG context + Docling (parser config, chunk store, per-encounter retrieval, large-doc map step)
 - [x] M2 — play one game (student combat client + server-authoritative play API)
-- [x] M3 — LMS + dashboard (classes / enroll / assign / review / analytics + app pages; T6 real Supabase auth deferred — needs your Supabase project)
+- [x] M3 — LMS + dashboard (classes / enroll / assign / review / analytics + app pages + real Supabase auth via JWKS)
 - [ ] **M4 — polish + deploy (Vercel + Render + Supabase) — next**
 
 ## Notes / constraints

@@ -1,7 +1,6 @@
 // Teacher console API client. X-Dev-Role: teacher is a dev shim until Supabase auth (M3-T6).
 import { apiFetch } from "@syllabusslayer/shared";
-
-const H = { "X-Dev-Role": "teacher" };
+import { authHeaders } from "@syllabusslayer/shared/auth";
 
 export interface ClassOut {
   id: string;
@@ -100,38 +99,43 @@ export interface Analytics {
 }
 
 export const teacher = {
-  listClasses: () => apiFetch<ClassOut[]>("/teacher/classes", { headers: H }),
-  createClass: (name: string) =>
+  listClasses: async () =>
+    apiFetch<ClassOut[]>("/teacher/classes", { headers: await authHeaders("teacher") }),
+  createClass: async (name: string) =>
     apiFetch<ClassOut>("/teacher/classes", {
       method: "POST",
-      headers: H,
+      headers: await authHeaders("teacher"),
       body: JSON.stringify({ name }),
     }),
-  classDetail: (id: string) => apiFetch<ClassDetail>(`/teacher/classes/${id}`, { headers: H }),
-  listCampaigns: () => apiFetch<CampaignSummary[]>("/teacher/campaigns", { headers: H }),
-  getCampaign: (id: string) => apiFetch<CampaignDetail>(`/teacher/campaigns/${id}`, { headers: H }),
-  listAssignments: (classId: string) =>
-    apiFetch<AssignmentOut[]>(`/teacher/classes/${classId}/assignments`, { headers: H }),
-  assign: (classId: string, campaignId: string) =>
+  classDetail: async (id: string) =>
+    apiFetch<ClassDetail>(`/teacher/classes/${id}`, { headers: await authHeaders("teacher") }),
+  listCampaigns: async () =>
+    apiFetch<CampaignSummary[]>("/teacher/campaigns", { headers: await authHeaders("teacher") }),
+  getCampaign: async (id: string) =>
+    apiFetch<CampaignDetail>(`/teacher/campaigns/${id}`, { headers: await authHeaders("teacher") }),
+  listAssignments: async (classId: string) =>
+    apiFetch<AssignmentOut[]>(`/teacher/classes/${classId}/assignments`, {
+      headers: await authHeaders("teacher"),
+    }),
+  assign: async (classId: string, campaignId: string) =>
     apiFetch<AssignmentOut>(`/teacher/classes/${classId}/assignments`, {
       method: "POST",
-      headers: H,
+      headers: await authHeaders("teacher"),
       body: JSON.stringify({ campaign_id: campaignId }),
     }),
-  editQuestion: (campaignId: string, questionId: string, q: ReviewQuestion) =>
+  editQuestion: async (campaignId: string, questionId: string, q: ReviewQuestion) =>
     apiFetch(`/teacher/campaigns/${campaignId}/questions/${questionId}`, {
       method: "PUT",
-      headers: H,
+      headers: await authHeaders("teacher"),
       body: JSON.stringify(q),
     }),
-  publish: (campaignId: string) =>
+  publish: async (campaignId: string) =>
     apiFetch<{ id: string; status: string }>(`/teacher/campaigns/${campaignId}/publish`, {
       method: "POST",
-      headers: H,
+      headers: await authHeaders("teacher"),
     }),
-  analytics: (campaignId: string, classId: string) =>
-    apiFetch<Analytics>(
-      `/teacher/campaigns/${campaignId}/analytics?class_id=${classId}`,
-      { headers: H },
-    ),
+  analytics: async (campaignId: string, classId: string) =>
+    apiFetch<Analytics>(`/teacher/campaigns/${campaignId}/analytics?class_id=${classId}`, {
+      headers: await authHeaders("teacher"),
+    }),
 };
