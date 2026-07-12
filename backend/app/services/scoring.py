@@ -123,23 +123,42 @@ def trailing_streak(is_correct_sequence: list[bool]) -> int:
     return streak
 
 
-def score_answer(q: dict, submitted: Any, prev_streak: int, cfg: CombatConfig) -> dict:
+def score_answer(
+    q: dict,
+    submitted: Any,
+    prev_streak: int,
+    cfg: CombatConfig,
+    effects: dict | None = None,
+    wrong_this_encounter: int = 0,
+) -> dict:
+    """Score one answer. `effects` = aggregated relic modifiers (relics.aggregate_effects);
+    they amplify damage/XP and cushion HP but never change correctness."""
+    effects = effects or {}
     is_correct, correct = check_answer(q, submitted)
     if is_correct:
         new_streak = prev_streak + 1
+        mult = streak_multiplier(new_streak + effects.get("streak_bonus", 0), cfg)
+        base = cfg.baseDamagePerCorrect + effects.get("bonus_damage", 0)
+        damage = round(base * mult * (1 + effects.get("damage_pct", 0.0)))
+        xp = round(
+            xp_for_difficulty(q.get("difficulty", "medium"), cfg) * (1 + effects.get("xp_pct", 0.0))
+        )
         return {
             "is_correct": True,
             "correct": correct,
-            "damage": round(cfg.baseDamagePerCorrect * streak_multiplier(new_streak, cfg)),
+            "damage": damage,
             "new_streak": new_streak,
-            "xp_gain": xp_for_difficulty(q.get("difficulty", "medium"), cfg),
+            "xp_gain": xp,
             "hp_cost": 0,
         }
+    hp_cost = max(0, cfg.wrongAnswerHpCost - effects.get("hp_ward", 0))
+    if effects.get("first_wrong_free") and wrong_this_encounter == 0:
+        hp_cost = 0
     return {
         "is_correct": False,
         "correct": correct,
         "damage": 0,
         "new_streak": 0,
         "xp_gain": 0,
-        "hp_cost": cfg.wrongAnswerHpCost,
+        "hp_cost": hp_cost,
     }

@@ -291,6 +291,37 @@ def test_runmap_boss_only_act():
     assert m["edges"] == []
 
 
+# --- relics (M5.2) ---------------------------------------------------------- #
+def test_relic_effects_amplify_scoring():
+    from app.schemas.game import CombatConfig
+    from app.services import relics, scoring
+
+    cfg = CombatConfig()  # base damage 10, wrong-answer cost 8
+    q = _mcq_q()
+    base = scoring.score_answer(q, "a", 0, cfg)
+    eff = relics.aggregate_effects(["keen_focus", "scholars_might"])  # +4 flat, +25%
+    assert scoring.score_answer(q, "a", 0, cfg, eff)["damage"] > base["damage"]
+
+    ward = relics.aggregate_effects(["aegis"])  # wrong cost -4
+    assert scoring.score_answer(q, "b", 0, cfg, ward)["hp_cost"] == cfg.wrongAnswerHpCost - 4
+
+    free = relics.aggregate_effects(["second_thought"])  # first wrong each encounter is free
+    assert scoring.score_answer(q, "b", 0, cfg, free, wrong_this_encounter=0)["hp_cost"] == 0
+    assert (
+        scoring.score_answer(q, "b", 0, cfg, free, wrong_this_encounter=1)["hp_cost"]
+        == cfg.wrongAnswerHpCost
+    )
+
+
+def test_relic_reward_options_exclude_owned_and_deterministic():
+    from app.services import relics
+
+    opts = relics.reward_options(owned=["keen_focus"], seed="s:1", n=3)
+    ids = {o["relicId"] for o in opts}
+    assert len(opts) == 3 and "keen_focus" not in ids
+    assert relics.reward_options(["keen_focus"], "s:1") == relics.reward_options(["keen_focus"], "s:1")
+
+
 # --- schema validator ------------------------------------------------------- #
 def test_question_validator_rejects_bad_mcq():
     with pytest.raises(ValidationError):

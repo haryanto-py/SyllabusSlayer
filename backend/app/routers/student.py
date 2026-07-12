@@ -29,7 +29,7 @@ from app.models.tables import (
     User,
 )
 from app.schemas.game import CombatConfig
-from app.services import runmap, scoring
+from app.services import relics, runmap, scoring
 from app.services.users import get_or_create_user
 
 router = APIRouter(prefix="/student", tags=["student"], dependencies=[Depends(require_student)])
@@ -121,7 +121,9 @@ def submit_answer(
         .order_by(QuestionAttempt.attempted_at)
     ).all()
     prev_streak = scoring.trailing_streak([a.is_correct for a in prior])
-    result = scoring.score_answer(question, body.answer, prev_streak, cfg)
+    effects = relics.aggregate_effects(ps.relics)
+    wrong_here = sum(1 for a in prior if a.encounter_id == body.encounter_id and not a.is_correct)
+    result = scoring.score_answer(question, body.answer, prev_streak, cfg, effects, wrong_here)
 
     session.add(
         QuestionAttempt(
@@ -151,6 +153,7 @@ def submit_answer(
         "damage": result["damage"],
         "streak": result["new_streak"],
         "hp": ps.hp_remaining,
+        "maxHp": cfg.playerStartingHp + (ps.bonus_max_hp or 0),
         "score": ps.final_score,
         "xp": ps.final_xp,
         "level": scoring.level_for_xp(ps.final_xp or 0, cfg),
@@ -179,6 +182,78 @@ def finish_play(
         "xp": ps.final_xp or 0,
         "hp": ps.hp_remaining,
         "level": scoring.level_for_xp(ps.final_xp or 0, cfg),
+    }
+
+
+# --------------------------------------------------------------------------- #
+# Rest sites + relic rewards (M5.2)
+# --------------------------------------------------------------------------- #
+def _max_hp(ps: PlaySession, cfg: CombatConfig) -> int:
+    return cfg.playerStartingHp + (ps.bonus_max_hp or 0)
+
+
+@router.post("/play/{session_id}/rest")
+def rest(
+    session_id: str,
+    session: Session = Depends(get_session),
+    current: CurrentUser = Depends(require_student),
+) -> dict:
+    user = get_or_create_user(session, current)
+    ps = _load_session(session, session_id, user)
+    campaign = session.get(Campaign, ps.campaign_id)
+    cfg = _cfg(campaign) if campaign else CombatConfig()
+    max_hp = _max_hp(ps, cfg)
+    heal = (max_hp * runmap.REST_HEAL_PCT + 99) // 100  # ceil
+    current_hp = ps.hp_remaining if ps.hp_remaining is not None else max_hp
+    ps.hp_remaining = min(max_hp, current_hp + heal)
+    session.add(ps)
+    session.commit()
+    return {"hp": ps.hp_remaining, "maxHp": max_hp, "healed": heal}
+
+
+@router.get("/play/{session_id}/reward-options")
+def reward_options(
+    session_id: str,
+    node_id: str = "",
+    session: Session = Depends(get_session),
+    current: CurrentUser = Depends(require_student),
+) -> dict:
+    user = get_or_create_user(session, current)
+    ps = _load_session(session, session_id, user)
+    return {"options": relics.reward_options(ps.relics, seed=f"{ps.id}:{node_id}")}
+
+
+class RewardIn(BaseModel):
+    relic_id: str
+
+
+@router.post("/play/{session_id}/reward")
+def take_reward(
+    session_id: str,
+    body: RewardIn,
+    session: Session = Depends(get_session),
+    current: CurrentUser = Depends(require_student),
+) -> dict:
+    user = get_or_create_user(session, current)
+    ps = _load_session(session, session_id, user)
+    campaign = session.get(Campaign, ps.campaign_id)
+    cfg = _cfg(campaign) if campaign else CombatConfig()
+    if body.relic_id not in relics.RELICS:
+        raise HTTPException(404, "unknown relic")
+    owned = list(ps.relics or [])
+    if body.relic_id not in owned:
+        owned.append(body.relic_id)
+        effect = relics.RELICS[body.relic_id]["effect"]
+        if effect["type"] == "max_hp":
+            ps.bonus_max_hp = (ps.bonus_max_hp or 0) + effect["magnitude"]
+            ps.hp_remaining = (ps.hp_remaining or cfg.playerStartingHp) + effect["magnitude"]
+        ps.relics = owned
+        session.add(ps)
+        session.commit()
+    return {
+        "relics": [relics.relic_public(r) for r in (ps.relics or [])],
+        "hp": ps.hp_remaining,
+        "maxHp": _max_hp(ps, cfg),
     }
 
 

@@ -147,6 +147,8 @@ class PlaySession(SQLModel, table=True):
     final_score: int | None = None
     final_xp: int | None = None
     hp_remaining: int | None = None
+    bonus_max_hp: int = 0  # from relics (max HP = combatConfig.playerStartingHp + this)
+    relics: list | None = Field(default=None, sa_column=Column(JSON))  # owned relic ids
     run_seed: str | None = None
 
 
