@@ -2,7 +2,14 @@
 import { apiFetch } from "@syllabusslayer/shared";
 import { authHeaders } from "@syllabusslayer/shared/auth";
 
-import type { AnswerResult, FinishResult, StartResponse } from "./types";
+import type {
+  AnswerResult,
+  FinishResult,
+  Relic,
+  RestResult,
+  RewardResult,
+  StartResponse,
+} from "./types";
 
 export async function startPlay(campaignId: string): Promise<StartResponse> {
   return apiFetch<StartResponse>(`/student/play/${campaignId}/start`, {
@@ -30,6 +37,28 @@ export async function finishPlay(sessionId: string): Promise<FinishResult> {
   return apiFetch<FinishResult>(`/student/play/${sessionId}/finish`, {
     method: "POST",
     headers: await authHeaders("student"),
+  });
+}
+
+export async function rest(sessionId: string): Promise<RestResult> {
+  return apiFetch<RestResult>(`/student/play/${sessionId}/rest`, {
+    method: "POST",
+    headers: await authHeaders("student"),
+  });
+}
+
+export async function rewardOptions(sessionId: string, nodeId: string): Promise<{ options: Relic[] }> {
+  return apiFetch<{ options: Relic[] }>(
+    `/student/play/${sessionId}/reward-options?node_id=${encodeURIComponent(nodeId)}`,
+    { headers: await authHeaders("student") },
+  );
+}
+
+export async function takeReward(sessionId: string, relicId: string): Promise<RewardResult> {
+  return apiFetch<RewardResult>(`/student/play/${sessionId}/reward`, {
+    method: "POST",
+    headers: await authHeaders("student"),
+    body: JSON.stringify({ relic_id: relicId }),
   });
 }
 

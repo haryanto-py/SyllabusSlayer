@@ -119,6 +119,7 @@ export interface AnswerResult {
   damage: number;
   streak: number;
   hp: number;
+  maxHp: number;
   score: number;
   xp: number;
   level: number;
@@ -131,4 +132,24 @@ export interface FinishResult {
   xp: number;
   hp: number;
   level: number;
+}
+
+export interface Relic {
+  relicId: string;
+  name: string;
+  icon: string;
+  rarity: string;
+  description: string;
+}
+
+export interface RestResult {
+  hp: number;
+  maxHp: number;
+  healed: number;
+}
+
+export interface RewardResult {
+  relics: Relic[];
+  hp: number;
+  maxHp: number;
 }

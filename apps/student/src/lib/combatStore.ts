@@ -1,9 +1,9 @@
-// Client run state (Zustand). The server is authoritative for correctness/scoring; this
-// store drives the run: navigate the act's map → fight the chosen encounter → return to
-// the map → the boss node clears the act → next act, or victory. HP persists across the run.
+// Client run state (Zustand). The server is authoritative for correctness, scoring, HP, and
+// relics; this store drives the run: navigate the act's map → fight the chosen encounter →
+// pick a relic reward → return to the map → the boss clears the act → next act, or victory.
 import { create } from "zustand";
 
-import { finishPlay, startPlay, submitAnswer } from "./play";
+import { finishPlay, rest, rewardOptions, startPlay, submitAnswer, takeReward } from "./play";
 import type {
   AnswerResult,
   CombatConfig,
@@ -11,6 +11,7 @@ import type {
   PlayAct,
   PlayEncounter,
   PlayGame,
+  Relic,
 } from "./types";
 
 export type Phase =
@@ -19,6 +20,7 @@ export type Phase =
   | "map"
   | "presenting"
   | "feedback"
+  | "reward"
   | "victory"
   | "defeat"
   | "error";
@@ -30,6 +32,7 @@ interface PlayerState {
   xp: number;
   level: number;
   score: number;
+  relics: Relic[];
 }
 
 interface CombatState {
@@ -54,10 +57,15 @@ interface CombatState {
   player: PlayerState;
   lastResult: AnswerResult | null;
 
+  // relic reward (after a cleared battle/boss)
+  rewardOptions: Relic[];
+  lastClearedBoss: boolean;
+
   start: (campaignId: string) => Promise<void>;
   selectNode: (nodeId: string) => Promise<void>;
   submit: (answer: unknown) => Promise<void>;
-  advance: () => void;
+  advance: () => Promise<void>;
+  chooseReward: (relicId: string | null) => Promise<void>;
   reset: () => void;
 
   act: () => PlayAct | null;
@@ -81,8 +89,10 @@ export const useCombat = create<CombatState>()((set, get) => ({
   questionIndex: 0,
   enemyHp: 0,
   enemyMaxHp: 0,
-  player: { hp: 0, maxHp: 0, streak: 0, xp: 0, level: 1, score: 0 },
+  player: { hp: 0, maxHp: 0, streak: 0, xp: 0, level: 1, score: 0, relics: [] },
   lastResult: null,
+  rewardOptions: [],
+  lastClearedBoss: false,
 
   act: () => get().game?.acts[get().actIndex] ?? null,
   totalActs: () => get().game?.acts.length ?? 0,
@@ -126,6 +136,8 @@ export const useCombat = create<CombatState>()((set, get) => ({
         activeNodeId: null,
         questionIndex: 0,
         lastResult: null,
+        rewardOptions: [],
+        lastClearedBoss: false,
         player: {
           hp: cfg.playerStartingHp,
           maxHp: cfg.playerStartingHp,
@@ -133,6 +145,7 @@ export const useCombat = create<CombatState>()((set, get) => ({
           xp: 0,
           level: 1,
           score: 0,
+          relics: [],
         },
         phase: "map",
       });
@@ -144,19 +157,24 @@ export const useCombat = create<CombatState>()((set, get) => ({
   selectNode: async (nodeId) => {
     const act = get().act();
     const node = act?.map.nodes.find((n) => n.nodeId === nodeId);
-    if (!act || !node) return;
+    const sessionId = get().sessionId;
+    if (!act || !node || !sessionId) return;
     if (!get().reachable().some((n) => n.nodeId === nodeId)) return; // not a legal move
 
     if (node.type === "rest") {
-      const { player } = get();
-      const heal = Math.ceil((player.maxHp * act.map.restHealPct) / 100);
-      set((s) => ({
-        player: { ...s.player, hp: Math.min(player.maxHp, player.hp + heal) },
-        clearedNodeIds: [...s.clearedNodeIds, nodeId],
-        currentNodeId: nodeId,
-        lastRestHeal: heal,
-        phase: "map",
-      }));
+      // Server-authoritative heal so the next /answer doesn't clobber the restored HP.
+      try {
+        const res = await rest(sessionId);
+        set((s) => ({
+          player: { ...s.player, hp: res.hp, maxHp: res.maxHp },
+          clearedNodeIds: [...s.clearedNodeIds, nodeId],
+          currentNodeId: nodeId,
+          lastRestHeal: res.healed,
+          phase: "map",
+        }));
+      } catch (e) {
+        set({ phase: "error", error: e instanceof Error ? e.message : String(e) });
+      }
       return;
     }
 
@@ -192,6 +210,7 @@ export const useCombat = create<CombatState>()((set, get) => ({
         player: {
           ...s.player,
           hp: res.hp,
+          maxHp: res.maxHp,
           streak: res.streak,
           xp: res.xp,
           level: res.level,
@@ -204,7 +223,7 @@ export const useCombat = create<CombatState>()((set, get) => ({
     }
   },
 
-  advance: () => {
+  advance: async () => {
     const s = get();
     if (!s.game) return;
     if (s.player.hp <= 0) {
@@ -218,34 +237,59 @@ export const useCombat = create<CombatState>()((set, get) => ({
       set({ phase: "presenting", questionIndex: s.questionIndex + 1, lastResult: null });
       return;
     }
-    // node cleared
+    // node cleared → offer a relic reward before advancing
     const act = s.act();
     const node = act?.map.nodes.find((n) => n.nodeId === s.activeNodeId);
     const cleared = [...s.clearedNodeIds, s.activeNodeId].filter(Boolean) as string[];
-    if (node?.type === "boss") {
+    set({
+      clearedNodeIds: cleared,
+      currentNodeId: s.activeNodeId,
+      lastClearedBoss: node?.type === "boss",
+      lastResult: null,
+      rewardOptions: [],
+      phase: "reward",
+    });
+    try {
+      const { options } = await rewardOptions(s.sessionId!, s.activeNodeId ?? "");
+      set({ rewardOptions: options });
+    } catch {
+      set({ rewardOptions: [] });
+    }
+  },
+
+  chooseReward: async (relicId) => {
+    const { sessionId } = get();
+    if (relicId && sessionId) {
+      try {
+        const res = await takeReward(sessionId, relicId);
+        set((s) => ({
+          player: { ...s.player, relics: res.relics, hp: res.hp, maxHp: res.maxHp },
+        }));
+      } catch (e) {
+        set({ phase: "error", error: e instanceof Error ? e.message : String(e) });
+        return;
+      }
+    }
+    const s = get();
+    if (s.lastClearedBoss) {
       const next = s.actIndex + 1;
-      if (next < s.game.acts.length) {
+      if (s.game && next < s.game.acts.length) {
         set({
           actIndex: next,
           currentNodeId: null,
           clearedNodeIds: [],
           activeNodeId: null,
+          rewardOptions: [],
           lastResult: null,
           phase: "map",
         });
       } else {
-        set({ phase: "victory", activeNodeId: null });
+        set({ phase: "victory", activeNodeId: null, rewardOptions: [] });
         if (s.sessionId) finishPlay(s.sessionId).catch(() => {});
       }
       return;
     }
-    set({
-      clearedNodeIds: cleared,
-      currentNodeId: s.activeNodeId,
-      activeNodeId: null,
-      lastResult: null,
-      phase: "map",
-    });
+    set({ activeNodeId: null, rewardOptions: [], phase: "map" });
   },
 
   reset: () =>

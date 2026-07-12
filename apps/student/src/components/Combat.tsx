@@ -9,6 +9,7 @@ import type { PlayQuestion } from "@/lib/types";
 
 import { HpBar, PlayerHud } from "./HpBar";
 import MapView from "./MapView";
+import RewardScreen from "./RewardScreen";
 
 export default function Combat({ campaignId }: { campaignId: string }) {
   const phase = useCombat((s) => s.phase);
@@ -23,6 +24,7 @@ export default function Combat({ campaignId }: { campaignId: string }) {
   if (phase === "idle" || phase === "loading") return <Centered>⚔️ Summoning your campaign…</Centered>;
   if (phase === "error") return <ErrorView />;
   if (phase === "victory" || phase === "defeat") return <ResultScreen />;
+  if (phase === "reward") return <RewardScreen />;
   if (phase === "map") return <MapView />;
   return <Arena />;
 }
