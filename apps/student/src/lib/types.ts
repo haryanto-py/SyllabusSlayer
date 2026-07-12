@@ -59,6 +59,22 @@ export interface PlayEncounter {
   questions: PlayQuestion[];
 }
 
+export interface MapNode {
+  nodeId: string;
+  row: number;
+  col: number;
+  type: "battle" | "rest" | "boss";
+  encounterId: string | null;
+  kind: string | null;
+  title: string;
+}
+
+export interface RunMap {
+  nodes: MapNode[];
+  edges: { from: string; to: string }[];
+  restHealPct: number;
+}
+
 export interface PlayAct {
   actId: string;
   order: number;
@@ -66,6 +82,7 @@ export interface PlayAct {
   syllabusTopic: string;
   summary: string;
   encounters: PlayEncounter[];
+  map: RunMap;
 }
 
 export interface CombatConfig {

@@ -29,7 +29,7 @@ from app.models.tables import (
     User,
 )
 from app.schemas.game import CombatConfig
-from app.services import scoring
+from app.services import runmap, scoring
 from app.services.users import get_or_create_user
 
 router = APIRouter(prefix="/student", tags=["student"], dependencies=[Depends(require_student)])
@@ -75,10 +75,16 @@ def start_play(
     session.add(ps)
     session.commit()
     session.refresh(ps)
+    game = scoring.redact_game(campaign.game_json)
+    for act in game.get("acts", []):
+        if not act.get("map"):  # campaigns generated before M5.1 have no run map
+            act["map"] = runmap.build_act_map(
+                act.get("encounters", []), seed=f"{campaign.id}:{act.get('actId', '')}"
+            )
     return {
         "session_id": ps.id,
         "combatConfig": cfg.model_dump(mode="json"),
-        "game": scoring.redact_game(campaign.game_json),
+        "game": game,
     }
 
 

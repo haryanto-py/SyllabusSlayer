@@ -1,13 +1,27 @@
-// Client combat state (Zustand). The server is authoritative for correctness/scoring;
-// this store sequences the UI: present a question → submit → apply the server's verdict
-// (enemy HP, player HP/streak/XP) → advance / clear encounter / win / lose.
-// (A lightweight phase machine — graduates to XState if relics/phases get complex.)
+// Client run state (Zustand). The server is authoritative for correctness/scoring; this
+// store drives the run: navigate the act's map → fight the chosen encounter → return to
+// the map → the boss node clears the act → next act, or victory. HP persists across the run.
 import { create } from "zustand";
 
 import { finishPlay, startPlay, submitAnswer } from "./play";
-import type { AnswerResult, CombatConfig, PlayEncounter, PlayGame, PlayQuestion } from "./types";
+import type {
+  AnswerResult,
+  CombatConfig,
+  MapNode,
+  PlayAct,
+  PlayEncounter,
+  PlayGame,
+} from "./types";
 
-export type Phase = "idle" | "loading" | "presenting" | "feedback" | "victory" | "defeat" | "error";
+export type Phase =
+  | "idle"
+  | "loading"
+  | "map"
+  | "presenting"
+  | "feedback"
+  | "victory"
+  | "defeat"
+  | "error";
 
 interface PlayerState {
   hp: number;
@@ -26,38 +40,30 @@ interface CombatState {
   game: PlayGame | null;
   combatConfig: CombatConfig | null;
   actIndex: number;
-  encounterIndex: number;
+
+  // map navigation (per act)
+  currentNodeId: string | null; // last cleared node this act (null = act start)
+  clearedNodeIds: string[];
+  lastRestHeal: number | null;
+
+  // active encounter (during a battle)
+  activeNodeId: string | null;
   questionIndex: number;
   enemyHp: number;
   enemyMaxHp: number;
   player: PlayerState;
   lastResult: AnswerResult | null;
-  encountersCleared: number;
 
   start: (campaignId: string) => Promise<void>;
+  selectNode: (nodeId: string) => Promise<void>;
   submit: (answer: unknown) => Promise<void>;
   advance: () => void;
   reset: () => void;
-  currentEncounter: () => PlayEncounter | null;
-  currentQuestion: () => PlayQuestion | null;
-  totalEncounters: () => number;
-}
 
-function firstPlayable(game: PlayGame): { a: number; e: number } | null {
-  for (let a = 0; a < game.acts.length; a++) {
-    for (let e = 0; e < game.acts[a].encounters.length; e++) {
-      if (game.acts[a].encounters[e].questions.length > 0) return { a, e };
-    }
-  }
-  return null;
-}
-
-function nextLocation(game: PlayGame, a: number, e: number): { a: number; e: number } | null {
-  if (game.acts[a] && e + 1 < game.acts[a].encounters.length) return { a, e: e + 1 };
-  for (let na = a + 1; na < game.acts.length; na++) {
-    if (game.acts[na].encounters.length > 0) return { a: na, e: 0 };
-  }
-  return null;
+  act: () => PlayAct | null;
+  reachable: () => MapNode[];
+  activeEncounter: () => PlayEncounter | null;
+  totalActs: () => number;
 }
 
 export const useCombat = create<CombatState>()((set, get) => ({
@@ -68,42 +74,58 @@ export const useCombat = create<CombatState>()((set, get) => ({
   game: null,
   combatConfig: null,
   actIndex: 0,
-  encounterIndex: 0,
+  currentNodeId: null,
+  clearedNodeIds: [],
+  lastRestHeal: null,
+  activeNodeId: null,
   questionIndex: 0,
   enemyHp: 0,
   enemyMaxHp: 0,
   player: { hp: 0, maxHp: 0, streak: 0, xp: 0, level: 1, score: 0 },
   lastResult: null,
-  encountersCleared: 0,
 
-  currentEncounter: () => {
-    const { game, actIndex, encounterIndex } = get();
-    return game?.acts[actIndex]?.encounters[encounterIndex] ?? null;
+  act: () => get().game?.acts[get().actIndex] ?? null,
+  totalActs: () => get().game?.acts.length ?? 0,
+  activeEncounter: () => {
+    const act = get().act();
+    const node = act?.map.nodes.find((n) => n.nodeId === get().activeNodeId);
+    return act?.encounters.find((e) => e.encounterId === node?.encounterId) ?? null;
   },
-  currentQuestion: () => get().currentEncounter()?.questions[get().questionIndex] ?? null,
-  totalEncounters: () =>
-    get().game?.acts.reduce((n, act) => n + act.encounters.length, 0) ?? 0,
+  reachable: () => {
+    const act = get().act();
+    if (!act) return [];
+    const cleared = new Set(get().clearedNodeIds);
+    const { currentNodeId } = get();
+    if (currentNodeId == null) {
+      const hasIncoming = new Set(act.map.edges.map((e) => e.to));
+      return act.map.nodes.filter((n) => !hasIncoming.has(n.nodeId) && !cleared.has(n.nodeId));
+    }
+    const successorIds = new Set(
+      act.map.edges.filter((e) => e.from === currentNodeId).map((e) => e.to),
+    );
+    return act.map.nodes.filter((n) => successorIds.has(n.nodeId) && !cleared.has(n.nodeId));
+  },
 
   start: async (campaignId) => {
-    set({ phase: "loading", error: null, encountersCleared: 0 });
+    set({ phase: "loading", error: null });
     try {
       const res = await startPlay(campaignId);
-      const loc = firstPlayable(res.game);
-      if (!loc) {
-        set({ phase: "error", error: "This campaign has no playable questions yet." });
+      const cfg = res.combatConfig;
+      if (!res.game.acts.length) {
+        set({ phase: "error", error: "This campaign has no content yet." });
         return;
       }
-      const enc = res.game.acts[loc.a].encounters[loc.e];
-      const cfg = res.combatConfig;
       set({
         sessionId: res.session_id,
         game: res.game,
         combatConfig: cfg,
-        actIndex: loc.a,
-        encounterIndex: loc.e,
+        actIndex: 0,
+        currentNodeId: null,
+        clearedNodeIds: [],
+        lastRestHeal: null,
+        activeNodeId: null,
         questionIndex: 0,
-        enemyHp: enc.combat.enemyMaxHp,
-        enemyMaxHp: enc.combat.enemyMaxHp,
+        lastResult: null,
         player: {
           hp: cfg.playerStartingHp,
           maxHp: cfg.playerStartingHp,
@@ -112,18 +134,49 @@ export const useCombat = create<CombatState>()((set, get) => ({
           level: 1,
           score: 0,
         },
-        lastResult: null,
-        phase: "presenting",
+        phase: "map",
       });
     } catch (e) {
       set({ phase: "error", error: e instanceof Error ? e.message : String(e) });
     }
   },
 
+  selectNode: async (nodeId) => {
+    const act = get().act();
+    const node = act?.map.nodes.find((n) => n.nodeId === nodeId);
+    if (!act || !node) return;
+    if (!get().reachable().some((n) => n.nodeId === nodeId)) return; // not a legal move
+
+    if (node.type === "rest") {
+      const { player } = get();
+      const heal = Math.ceil((player.maxHp * act.map.restHealPct) / 100);
+      set((s) => ({
+        player: { ...s.player, hp: Math.min(player.maxHp, player.hp + heal) },
+        clearedNodeIds: [...s.clearedNodeIds, nodeId],
+        currentNodeId: nodeId,
+        lastRestHeal: heal,
+        phase: "map",
+      }));
+      return;
+    }
+
+    const enc = act.encounters.find((e) => e.encounterId === node.encounterId);
+    if (!enc) return;
+    set({
+      activeNodeId: nodeId,
+      questionIndex: 0,
+      enemyHp: enc.combat.enemyMaxHp,
+      enemyMaxHp: enc.combat.enemyMaxHp,
+      lastResult: null,
+      lastRestHeal: null,
+      phase: "presenting",
+    });
+  },
+
   submit: async (answer) => {
     const { sessionId, submitting } = get();
-    const enc = get().currentEncounter();
-    const q = get().currentQuestion();
+    const enc = get().activeEncounter();
+    const q = enc?.questions[get().questionIndex];
     if (!sessionId || !enc || !q || submitting) return;
     set({ submitting: true });
     try {
@@ -159,28 +212,39 @@ export const useCombat = create<CombatState>()((set, get) => ({
       if (s.sessionId) finishPlay(s.sessionId).catch(() => {});
       return;
     }
-    const enc = s.currentEncounter();
-    const cleared = s.enemyHp <= 0 || !enc || s.questionIndex + 1 >= enc.questions.length;
-    if (!cleared) {
+    const enc = s.activeEncounter();
+    const encounterCleared = s.enemyHp <= 0 || !enc || s.questionIndex + 1 >= enc.questions.length;
+    if (!encounterCleared) {
       set({ phase: "presenting", questionIndex: s.questionIndex + 1, lastResult: null });
       return;
     }
-    const loc = nextLocation(s.game, s.actIndex, s.encounterIndex);
-    if (!loc) {
-      set({ phase: "victory", encountersCleared: s.encountersCleared + 1 });
-      if (s.sessionId) finishPlay(s.sessionId).catch(() => {});
+    // node cleared
+    const act = s.act();
+    const node = act?.map.nodes.find((n) => n.nodeId === s.activeNodeId);
+    const cleared = [...s.clearedNodeIds, s.activeNodeId].filter(Boolean) as string[];
+    if (node?.type === "boss") {
+      const next = s.actIndex + 1;
+      if (next < s.game.acts.length) {
+        set({
+          actIndex: next,
+          currentNodeId: null,
+          clearedNodeIds: [],
+          activeNodeId: null,
+          lastResult: null,
+          phase: "map",
+        });
+      } else {
+        set({ phase: "victory", activeNodeId: null });
+        if (s.sessionId) finishPlay(s.sessionId).catch(() => {});
+      }
       return;
     }
-    const nextEnc = s.game.acts[loc.a].encounters[loc.e];
     set({
-      actIndex: loc.a,
-      encounterIndex: loc.e,
-      questionIndex: 0,
-      enemyHp: nextEnc.combat.enemyMaxHp,
-      enemyMaxHp: nextEnc.combat.enemyMaxHp,
+      clearedNodeIds: cleared,
+      currentNodeId: s.activeNodeId,
+      activeNodeId: null,
       lastResult: null,
-      phase: "presenting",
-      encountersCleared: s.encountersCleared + 1,
+      phase: "map",
     });
   },
 

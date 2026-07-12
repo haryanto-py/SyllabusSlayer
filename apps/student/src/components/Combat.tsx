@@ -7,6 +7,9 @@ import { useEffect, useState } from "react";
 import { useCombat } from "@/lib/combatStore";
 import type { PlayQuestion } from "@/lib/types";
 
+import { HpBar, PlayerHud } from "./HpBar";
+import MapView from "./MapView";
+
 export default function Combat({ campaignId }: { campaignId: string }) {
   const phase = useCombat((s) => s.phase);
   const start = useCombat((s) => s.start);
@@ -20,13 +23,12 @@ export default function Combat({ campaignId }: { campaignId: string }) {
   if (phase === "idle" || phase === "loading") return <Centered>⚔️ Summoning your campaign…</Centered>;
   if (phase === "error") return <ErrorView />;
   if (phase === "victory" || phase === "defeat") return <ResultScreen />;
+  if (phase === "map") return <MapView />;
   return <Arena />;
 }
 
 function Centered({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="flex flex-1 items-center justify-center px-6 text-zinc-300">{children}</div>
-  );
+  return <div className="flex flex-1 items-center justify-center px-6 text-zinc-300">{children}</div>;
 }
 
 function ErrorView() {
@@ -43,42 +45,18 @@ function ErrorView() {
   );
 }
 
-function HpBar({ value, max, color }: { value: number; max: number; color: string }) {
-  const pct = max > 0 ? Math.max(0, Math.min(100, (value / max) * 100)) : 0;
-  return (
-    <div className="h-3 w-full overflow-hidden rounded-full bg-zinc-800">
-      <motion.div
-        className={`h-full ${color}`}
-        animate={{ width: `${pct}%` }}
-        transition={{ type: "spring", stiffness: 120, damping: 20 }}
-      />
-    </div>
-  );
-}
-
 function Arena() {
-  const game = useCombat((s) => s.game);
-  const actIndex = useCombat((s) => s.actIndex);
-  const encounterIndex = useCombat((s) => s.encounterIndex);
+  const enc = useCombat((s) => s.activeEncounter());
   const enemyHp = useCombat((s) => s.enemyHp);
   const enemyMaxHp = useCombat((s) => s.enemyMaxHp);
   const player = useCombat((s) => s.player);
   const phase = useCombat((s) => s.phase);
-  const cleared = useCombat((s) => s.encountersCleared);
-  const total = useCombat((s) => s.totalEncounters());
   const questionIndex = useCombat((s) => s.questionIndex);
 
-  const act = game?.acts[actIndex];
-  const enc = act?.encounters[encounterIndex];
   if (!enc) return <Centered>…</Centered>;
 
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-5 px-5 py-8">
-      <div className="text-center text-xs uppercase tracking-widest text-zinc-500">
-        {act?.title} · Encounter {cleared + 1} / {total}
-      </div>
-
-      {/* Boss */}
       <motion.div
         key={enc.encounterId}
         initial={{ opacity: 0, y: -8 }}
@@ -102,29 +80,14 @@ function Arena() {
         </div>
       </motion.div>
 
-      {/* Player HUD */}
-      <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4">
-        <div className="mb-2 flex items-center justify-between text-sm text-zinc-300">
-          <span>
-            ❤️ {player.hp}/{player.maxHp}
-          </span>
-          <span className="flex gap-3">
-            <span className="text-amber-300">🔥 streak {player.streak}</span>
-            <span>Lv {player.level}</span>
-            <span>XP {player.xp}</span>
-            <span>⚔️ {player.score}</span>
-          </span>
-        </div>
-        <HpBar value={player.hp} max={player.maxHp} color="bg-emerald-500" />
-      </div>
+      <PlayerHud player={player} />
 
-      {/* Question / feedback */}
       <AnimatePresence mode="wait">
         {phase === "feedback" || !enc.questions[questionIndex] ? (
           <Feedback key="fb" />
         ) : (
           <QuestionView
-            key={`q-${actIndex}-${encounterIndex}-${questionIndex}`}
+            key={`q-${enc.encounterId}-${questionIndex}`}
             question={enc.questions[questionIndex]}
           />
         )}
@@ -136,7 +99,6 @@ function Arena() {
 function QuestionView({ question }: { question: PlayQuestion }) {
   const submit = useCombat((s) => s.submit);
   const submitting = useCombat((s) => s.submitting);
-
   return (
     <motion.div
       initial={{ opacity: 0, y: 8 }}
@@ -356,7 +318,7 @@ function ResultScreen() {
       >
         <div className="text-5xl">{win ? "🏆" : "💀"}</div>
         <h1 className={`mt-3 text-3xl font-extrabold ${win ? "text-amber-300" : "text-rose-300"}`}>
-          {win ? "Campaign Cleared!" : "Defeated"}
+          {win ? "Campaign Cleared!" : "Run Over"}
         </h1>
         <p className="mt-4 text-zinc-300">
           Score {player.score} · XP {player.xp} · Level {player.level} · HP {player.hp}
@@ -367,7 +329,7 @@ function ResultScreen() {
               onClick={() => start(game.campaignId)}
               className="rounded-lg bg-amber-500 px-5 py-3 font-semibold text-zinc-950 hover:bg-amber-400"
             >
-              Play again
+              New run
             </button>
           )}
           <Link

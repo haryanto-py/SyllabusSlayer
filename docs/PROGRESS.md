@@ -42,7 +42,8 @@ Real Supabase auth (T6) is wired; the dev `X-Dev-Role` shim remains only as a no
 - [x] M2 — play one game (student combat client + server-authoritative play API)
 - [x] M3 — LMS + dashboard (classes / enroll / assign / review / analytics + app pages + real Supabase auth via JWKS)
 - [x] M4 — polish + deploy (Docker + render.yaml + DEPLOY.md; deploy-ready — live deploy is the user's dashboard step)
-- [ ] **M5 — make it a game** (research done → `docs/GAME-FEEL-RESEARCH.md`). Phases: M5.1 run map · M5.2 relics + reward choice · M5.3 meta-progression + permadeath · M5.4 Phaser canvas arena + juice · M5.5 polish. **Do structure (M5.1–M5.3) before canvas (M5.4).**
+- [ ] **M5 — make it a game** (research done → `docs/GAME-FEEL-RESEARCH.md`). Phases: **M5.1 run map ✅** · M5.2 relics + reward choice · M5.3 meta-progression + permadeath · M5.4 Phaser canvas arena + juice · M5.5 polish. **Do structure (M5.1–M5.3) before canvas (M5.4).**
+  - M5.1 DONE: backend `runmap.build_act_map` (deterministic layered DAG, attached per act + injected at serve-time for old campaigns); student client refactored to **map navigation** (Zustand phases map→presenting→feedback→map; boss node clears the act) + `MapView` (pick your path). Both apps build; 24 tests pass.
 
 ## Notes / constraints
 - OpenAI budget ~$5 total; ~$0.15 spent. Use `gpt-5.4-nano` (outline) + `gpt-5.4-mini` (questions); avoid `gpt-5.4`/`5.5`/`pro`. `gpt-4o-mini` available as a stable fallback (not needed so far).
