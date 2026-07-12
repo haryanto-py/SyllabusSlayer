@@ -4,15 +4,31 @@
 
 An AI-Engineer portfolio project. The headline isn't "generate a quiz from a PDF" (that's commodity) — it's **source-grounded, cited questions**, a **syllabus-mapped roguelike campaign**, a real **teacher LMS loop**, and a visible **eval/guardrail harness**.
 
+## Why it's different
+
+Two camps dominate this space; SyllabusSlayer sits in the gap between them:
+- **Classroom quiz-games** (Kahoot, Quizizz, Blooket) — arcade skins over a shared question set; generic AI, no source grounding.
+- **AI quiz generators** (Quizgecko, Conker, MagicSchool) — turn a doc into a *static* quiz; no game, no monitoring.
+
+It occupies the intersection none of them do: **the teacher's own materials → source-grounded, *verified* questions → a real roguelike run mapped to the syllabus → a teacher review/assign/monitor loop.**
+
+**The AI-engineering that makes it credible:**
+- **Grounded generation + a verification guardrail.** Every question stores a verbatim `sourceQuote` (+ chunk id & page); an eval pass (`services/evals.py`) checks the quote is actually in the source and flags hallucinations. *Sample run (cell biology): 20 questions, **100% source-grounded**, **~$0.025**.*
+- **A pipeline, not a prompt.** Two-layer design — the LLM writes only the *pedagogy* via **Structured Outputs**; the backend deterministically owns HP/damage/XP so balance can't be hallucinated. Staged generation (outline → per-encounter), per-encounter **retrieval** for focused/cheap context, a map-reduce fallback for large docs, and model tiering for cost.
+- **Assessment integrity.** The game served to a student is **redacted** (no answers); correctness is checked **server-side**; every attempt is persisted.
+- **Human-in-the-loop.** Teachers **review/edit** AI questions before publishing — nothing auto-assigns unreviewed content.
+
+**Where to look:** AI core → `backend/app/services/{generation,evals,scoring,retrieval,runmap}.py` · LLM output contract → `backend/app/schemas/game.py` · research & decisions → [`docs/BUILD-SPEC.md`](docs/BUILD-SPEC.md), [`docs/GAME-FEEL-RESEARCH.md`](docs/GAME-FEEL-RESEARCH.md).
+
 ## Architecture
 
 ```
-Next.js (Vercel)  ──HTTPS+JWT──▶  FastAPI (Render)  ──▶  OpenAI (Structured Outputs, Batch API)
-  React+Tailwind                   ingestion · generation        ──▶  Supabase (Postgres+pgvector,
-  +Motion+XState+Zustand           combat-tuning · evals               Auth, Storage)
+Next.js (Vercel)  ──HTTPS+JWT──▶  FastAPI (Render)  ──▶  OpenAI (Structured Outputs)
+  React+Tailwind                   ingestion · generation        ──▶  Supabase (Postgres,
+  +Motion+Zustand (run map)        combat-tuning · evals · scoring     Auth)
 ```
 
-- **Game client:** plain React + Tailwind + **Motion** + **XState** + **Zustand** (no canvas engine — combat is turn-based/UI-driven).
+- **Game client:** React + Tailwind + **Motion** + a **Zustand** phase machine (turn-based, UI-driven) — students navigate a branching **run map**; a Phaser/Pixi canvas battle arena is planned (M5.4).
 - **Game data:** the LLM generates the *pedagogical* layer via **OpenAI Structured Outputs** (a flat discriminated-union `Question`, generated outline → per-encounter batches); the backend computes the *combat tuning* (HP/damage/XP) deterministically.
 - **Ingestion:** **MarkItDown** (default, light) / Docling (optional) → Markdown + section tree; **retrieval** (text-embedding-3-small) supplies focused per-encounter context, gated by a `tiktoken` size check.
 - **Auth:** Supabase email+password; tokens verified server-side via **JWKS**. **Infra:** Supabase Postgres · Render (API) · Vercel (apps).
@@ -65,7 +81,7 @@ Each app needs a git-ignored `.env.local` with `NEXT_PUBLIC_SUPABASE_URL`, `NEXT
 
 ## Status
 
-- ✅ **M0** scaffold (monorepo + backend) · ✅ **M1** AI generation pipeline (ingestion → Structured Outputs → combat tuning → evals; ~$0.025/game, source-grounded) · ✅ **M1.2** RAG per-encounter context · ✅ **M2** playable student combat (server-authoritative scoring) · ✅ **M3** LMS — classes, enrollment, assignments, review/edit, dashboard analytics + **Supabase auth (JWKS)** · 🔧 **M4** polish + deploy (in progress).
+- ✅ **M0** scaffold (monorepo + backend) · ✅ **M1** AI generation pipeline (ingestion → Structured Outputs → combat tuning → evals; ~$0.025/game, source-grounded) · ✅ **M1.2** RAG per-encounter context · ✅ **M2** playable student combat (server-authoritative scoring) · ✅ **M3** LMS — classes, enrollment, assignments, review/edit, dashboard analytics + **Supabase auth (JWKS)** · ✅ **M4** deploy-ready (Docker + Render + Vercel) · 🔧 **M5** make it a game (**M5.1 run map ✅**; relics → meta-progression → Phaser canvas arena next).
 - **Deploy:** [`docs/DEPLOY.md`](docs/DEPLOY.md) — Vercel (2 apps) + Render (`render.yaml` + `backend/Dockerfile`) + Supabase.
 - Run the live generation pipeline: `cd backend && uv run python scripts/m1_demo.py` (needs `OPENAI_API_KEY` in the root `.env`).
 
