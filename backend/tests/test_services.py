@@ -260,6 +260,37 @@ def test_scoring_redact_removes_answers():
     assert q["options"]  # options still present to render
 
 
+# --- run map (M5.1) --------------------------------------------------------- #
+def test_runmap_deterministic_and_boss_terminal():
+    from app.services.runmap import build_act_map
+
+    encs = [
+        {"encounterId": "e1", "kind": "minion", "title": "M1"},
+        {"encounterId": "e2", "kind": "elite", "title": "E1"},
+        {"encounterId": "eb", "kind": "boss", "title": "Boss"},
+    ]
+    m1 = build_act_map(encs, "camp:act1")
+    assert m1 == build_act_map(encs, "camp:act1")  # deterministic
+
+    nodes, edges = m1["nodes"], m1["edges"]
+    bosses = [n for n in nodes if n["type"] == "boss"]
+    assert len(bosses) == 1 and bosses[0]["encounterId"] == "eb"
+    boss_id = bosses[0]["nodeId"]
+    assert all(e["from"] != boss_id for e in edges)  # boss is terminal
+    assert any(e["to"] == boss_id for e in edges)  # boss reachable
+    incoming = {e["to"] for e in edges}
+    assert [n for n in nodes if n["nodeId"] not in incoming]  # >= 1 entry node
+    assert {n["encounterId"] for n in nodes if n["type"] == "battle"} == {"e1", "e2"}
+
+
+def test_runmap_boss_only_act():
+    from app.services.runmap import build_act_map
+
+    m = build_act_map([{"encounterId": "eb", "kind": "boss", "title": "Boss"}], "c:a")
+    assert len(m["nodes"]) == 1 and m["nodes"][0]["type"] == "boss"
+    assert m["edges"] == []
+
+
 # --- schema validator ------------------------------------------------------- #
 def test_question_validator_rejects_bad_mcq():
     with pytest.raises(ValidationError):

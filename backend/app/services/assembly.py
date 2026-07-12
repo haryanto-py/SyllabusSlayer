@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from app.core.config import settings
 from app.schemas.game import SCHEMA_VERSION, CombatConfig
-from app.services import combat_tuning, evals, generation, retrieval
+from app.services import combat_tuning, evals, generation, retrieval, runmap
 from app.services.chunking import count_tokens
 from app.services.ingestion import ParsedDocument, flatten
 
@@ -165,6 +165,9 @@ def build_game(
                 "syllabusTopic": act.syllabusTopic,
                 "summary": act.summary,
                 "encounters": encounters_out,
+                "map": runmap.build_act_map(
+                    encounters_out, seed=f"{outline.campaignId}:{act.actId}"
+                ),
             }
         )
 
