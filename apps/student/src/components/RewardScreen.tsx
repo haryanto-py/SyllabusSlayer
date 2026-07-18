@@ -3,6 +3,7 @@
 import { AnimatePresence, motion } from "motion/react";
 
 import { useCombat } from "@/lib/combatStore";
+import * as sfx from "@/game/sfx";
 
 const RARITY: Record<string, string> = {
   rare: "border-amber-500/70 text-amber-300",
@@ -40,7 +41,10 @@ export default function RewardScreen() {
                 transition={{ delay: i * 0.06 }}
                 whileHover={{ scale: 1.03 }}
                 whileTap={{ scale: 0.97 }}
-                onClick={() => choose(r.relicId)}
+                onClick={() => {
+                  sfx.reward();
+                  choose(r.relicId);
+                }}
                 className={`flex flex-col items-center gap-2 rounded-2xl border bg-zinc-900/80 p-5 text-center transition-colors hover:bg-zinc-900 ${
                   RARITY[r.rarity] ?? RARITY.common
                 }`}

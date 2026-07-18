@@ -11,6 +11,7 @@ import {
   type BattleSetup,
   EventBus,
 } from "./EventBus";
+import * as sfx from "./sfx";
 
 const GAME_W = 700;
 const GAME_H = 300;
@@ -51,6 +52,21 @@ export class BattleScene extends Phaser.Scene {
     g.fillStyle(0xffffff, 1).fillCircle(4, 4, 4);
     g.generateTexture("spark", 8, 8);
     g.destroy();
+
+    // soft glows behind each combatant + slow ambient embers (atmosphere, drawn behind sprites)
+    this.add.circle(this.heroX, this.midY, 62, 0x22c55e, 0.1).setBlendMode(Phaser.BlendModes.ADD);
+    this.add.circle(this.enemyX, this.midY, 72, 0xef4444, 0.1).setBlendMode(Phaser.BlendModes.ADD);
+    this.add.particles(0, 0, "spark", {
+      x: { min: 0, max: GAME_W },
+      y: GAME_H + 6,
+      lifespan: 4200,
+      speedY: { min: -12, max: -30 },
+      scale: { start: 0.5, end: 0 },
+      alpha: { start: 0.22, end: 0 },
+      tint: 0x6366f1,
+      frequency: 420,
+      quantity: 1,
+    });
 
     this.hero = this.add.text(this.heroX, this.midY, "🧙", { fontSize: "72px" }).setOrigin(0.5);
     this.enemy = this.add.text(this.enemyX, this.midY, "👾", { fontSize: "92px" }).setOrigin(0.5);
@@ -109,6 +125,8 @@ export class BattleScene extends Phaser.Scene {
 
   private impact(a: BattleAnswer) {
     const crit = a.streak > 1;
+    this.hitStop();
+    sfx.hit(a.streak);
     this.cameras.main.shake(180, Math.min(0.02, 0.006 + a.damage / 1500));
     this.flash(this.enemyX, this.midY, crit ? 0xf59e0b : 0xffffff);
     this.tweens.add({ targets: this.enemy, scaleX: 1.28, scaleY: 0.78, duration: 90, yoyo: true, ease: "Quad.out" });
@@ -128,6 +146,7 @@ export class BattleScene extends Phaser.Scene {
       yoyo: true,
       ease: "Quad.out",
       onYoyo: () => {
+        sfx.hurt();
         this.cameras.main.shake(140, 0.008);
         this.flash(this.heroX, this.midY, 0xef4444);
         this.tweens.add({ targets: this.hero, x: this.heroX - 26, duration: 80, yoyo: true, ease: "Quad.out" });
@@ -138,8 +157,17 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private slayEnemy() {
+    sfx.slay();
     this.burst(this.enemyX, this.midY, 0xf59e0b, 30);
     this.tweens.add({ targets: this.enemy, alpha: 0, scale: 1.7, angle: 25, duration: 460, ease: "Quad.out" });
+  }
+
+  /** Brief hit-stop: freeze tweens for a beat on impact so the hit reads as "chunky". */
+  private hitStop(ms = 55) {
+    this.tweens.timeScale = 0.02;
+    window.setTimeout(() => {
+      if (this.tweens) this.tweens.timeScale = 1;
+    }, ms);
   }
 
   // --- helpers --------------------------------------------------------------- //

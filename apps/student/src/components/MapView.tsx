@@ -1,9 +1,11 @@
 "use client";
 
 import { motion } from "motion/react";
+import { useEffect } from "react";
 
 import { useCombat } from "@/lib/combatStore";
 import type { MapNode } from "@/lib/types";
+import * as sfx from "@/game/sfx";
 
 import { PlayerHud } from "./HpBar";
 
@@ -19,6 +21,10 @@ export default function MapView() {
   const lastRestHeal = useCombat((s) => s.lastRestHeal);
   const totalActs = useCombat((s) => s.totalActs());
   const profile = useCombat((s) => s.profile);
+
+  useEffect(() => {
+    if (lastRestHeal) sfx.heal();
+  }, [lastRestHeal]);
 
   const act = game?.acts[actIndex];
   if (!act) return null;

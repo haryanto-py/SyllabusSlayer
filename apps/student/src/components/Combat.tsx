@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { AnimatePresence, motion } from "motion/react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 
-import { useCombat } from "@/lib/combatStore";
+import { type Phase, useCombat } from "@/lib/combatStore";
 import type { PlayQuestion } from "@/lib/types";
+import * as sfx from "@/game/sfx";
 
 import BattleCanvas, { ENEMY_EMOJI } from "./BattleCanvas";
 import { PlayerHud } from "./HpBar";
@@ -22,12 +23,55 @@ export default function Combat({ campaignId }: { campaignId: string }) {
     return () => reset();
   }, [campaignId, start, reset]);
 
+  return (
+    <div className="relative flex flex-1 flex-col">
+      <SoundToggle />
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={screenKey(phase)}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.18 }}
+          className="flex flex-1 flex-col"
+        >
+          <Screen phase={phase} />
+        </motion.div>
+      </AnimatePresence>
+    </div>
+  );
+}
+
+// Coarse screen id so presenting<->feedback (both the arena) don't trigger a full crossfade.
+function screenKey(phase: Phase): string {
+  if (phase === "presenting" || phase === "feedback") return "arena";
+  if (phase === "idle" || phase === "loading") return "loading";
+  if (phase === "victory" || phase === "defeat") return "result";
+  return phase; // map | reward | error
+}
+
+function Screen({ phase }: { phase: Phase }) {
   if (phase === "idle" || phase === "loading") return <Centered>⚔️ Summoning your campaign…</Centered>;
   if (phase === "error") return <ErrorView />;
   if (phase === "victory" || phase === "defeat") return <ResultScreen />;
   if (phase === "reward") return <RewardScreen />;
   if (phase === "map") return <MapView />;
   return <Arena />;
+}
+
+function SoundToggle() {
+  // external (localStorage) state — read via useSyncExternalStore so SSR renders 🔊 and the client
+  // syncs without a hydration mismatch or a setState-in-effect.
+  const muted = useSyncExternalStore(sfx.subscribeMuted, sfx.isMuted, () => false);
+  return (
+    <button
+      onClick={() => sfx.toggleMuted()}
+      aria-label={muted ? "Unmute sound" : "Mute sound"}
+      className="absolute right-3 top-3 z-10 rounded-full border border-zinc-700 bg-zinc-900/80 px-2.5 py-1 text-sm text-zinc-300 transition-colors hover:bg-zinc-800"
+    >
+      {muted ? "🔇" : "🔊"}
+    </button>
+  );
 }
 
 function Centered({ children }: { children: React.ReactNode }) {
@@ -315,6 +359,11 @@ function ResultScreen() {
   const game = useCombat((s) => s.game);
   const start = useCombat((s) => s.start);
   const win = phase === "victory";
+
+  useEffect(() => {
+    if (win) sfx.victory();
+    else sfx.defeat();
+  }, [win]);
 
   // Server-authoritative meta (M5.3); fall back to in-memory player if the finish call failed.
   const score = summary?.score ?? player.score;
