@@ -16,16 +16,17 @@ engine = create_engine(settings.database_url, echo=False, connect_args=_connect_
 
 
 def init_db() -> None:
-    """Create tables. Fine for local/SQLite dev; use Alembic migrations for prod.
+    """Ensure the schema exists.
 
-    NOTE: create_all only creates MISSING tables — it never ALTERs existing ones. When a
-    model gains a column (e.g. M5.3 added StudentProgress.meta_currency + unlocked_relics and
-    the SessionStatus.defeated value), a FRESH dev SQLite DB picks it up automatically, but an
-    existing dev.db must be deleted/recreated, and Supabase Postgres prod needs a real migration:
-        ALTER TABLE student_progress ADD COLUMN meta_currency INTEGER NOT NULL DEFAULT 0;
-        ALTER TABLE student_progress ADD COLUMN unlocked_relics JSONB;
-    (SessionStatus is stored as a plain string column, so no enum-type migration is required.)
+    Dev/tests (SQLite): ``create_all`` for zero-friction setup. PROD: schema is owned by
+    versioned **Alembic migrations** (``alembic upgrade head``, run at deploy — see the Docker
+    CMD), so this is a no-op. That's the right split: ``create_all`` only creates MISSING tables
+    (it never ALTERs existing ones), whereas migrations handle column/enum changes safely on the
+    live Supabase Postgres DB. To evolve the schema: edit the models, then
+    ``uv run alembic revision --autogenerate -m "..."`` and commit the migration.
     """
+    if settings.env == "prod":
+        return  # migrations own the schema in prod
     # Import models so they register on SQLModel.metadata before create_all.
     from app import models  # noqa: F401
 

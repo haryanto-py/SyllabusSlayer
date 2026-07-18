@@ -14,8 +14,8 @@ from app.routers import health, student, teacher
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Create any missing tables on startup (idempotent) — works for SQLite (dev) and
-    # Postgres (prod). Introduce Alembic migrations later for richer schema changes.
+    # Dev/tests: create missing SQLite tables (idempotent). Prod: no-op — the schema is applied
+    # by `alembic upgrade head` at deploy (see backend/Dockerfile).
     init_db()
     yield
 

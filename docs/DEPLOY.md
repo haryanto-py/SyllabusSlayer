@@ -23,7 +23,10 @@ You already have the project + keys. Two more things for prod:
 - **Auth URLs** — Supabase → *Authentication → URL Configuration*: add your Vercel app URLs to **Site URL** / **Redirect URLs** so email links resolve. For a frictionless demo you can keep "Confirm email" off.
 - *(Optional, later)* `create extension if not exists vector;` — only needed if/when we move chunk retrieval into pgvector (currently retrieval is in-memory at generation time).
 
-Tables are created automatically on first backend boot (`init_db()` / `create_all`).
+The schema is applied by **Alembic migrations** — the backend container runs `alembic upgrade head`
+before serving (see `backend/Dockerfile`), so a fresh Supabase Postgres DB is provisioned on first
+deploy and future schema changes roll out automatically. (Local dev uses `create_all` for zero
+friction; prod is migration-owned.)
 
 ## 2. Backend → Render (Docker)
 
@@ -70,6 +73,9 @@ For **each** app (teacher, then student), create a Vercel project from this repo
 4. Back in the teacher app → the class dashboard shows the student's attempts + mastery.
 
 ## Notes / follow-ups
-- **Migrations:** tables are auto-created; adopt **Alembic** before making breaking schema changes in prod.
+- **Migrations (Alembic):** the deploy applies `alembic upgrade head` automatically. To change the
+  schema: edit the SQLModel models, run `uv run alembic revision --autogenerate -m "..."`, review the
+  generated file in `backend/alembic/versions/`, and commit it. `uv run alembic check` verifies the
+  migrations match the models. Batch mode is on, so migrations also run on SQLite.
 - **Secrets:** never commit `.env` / `.env.local` (git-ignored). Set all secrets in the Render / Vercel dashboards.
 - **Model ids/pricing** are pinned as env vars — re-verify on the OpenAI pricing page periodically.
