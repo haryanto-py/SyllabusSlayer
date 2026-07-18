@@ -3,7 +3,15 @@
 // pick a relic reward → return to the map → the boss clears the act → next act, or victory.
 import { create } from "zustand";
 
-import { finishPlay, rest, rewardOptions, startPlay, submitAnswer, takeReward } from "./play";
+import {
+  finishPlay,
+  getProfile,
+  rest,
+  rewardOptions,
+  startPlay,
+  submitAnswer,
+  takeReward,
+} from "./play";
 import type {
   AnswerResult,
   CombatConfig,
@@ -13,6 +21,7 @@ import type {
   PlayGame,
   Relic,
   RunSummary,
+  StudentProfile,
 } from "./types";
 
 export type Phase =
@@ -64,6 +73,7 @@ interface CombatState {
 
   // server-authoritative run-end summary (meta-progression, M5.3)
   runSummary: RunSummary | null;
+  profile: StudentProfile | null; // persisted meta, surfaced on the map (best-effort)
 
   start: (campaignId: string) => Promise<void>;
   selectNode: (nodeId: string) => Promise<void>;
@@ -98,6 +108,7 @@ export const useCombat = create<CombatState>()((set, get) => ({
   rewardOptions: [],
   lastClearedBoss: false,
   runSummary: null,
+  profile: null,
 
   act: () => get().game?.acts[get().actIndex] ?? null,
   totalActs: () => get().game?.acts.length ?? 0,
@@ -144,6 +155,7 @@ export const useCombat = create<CombatState>()((set, get) => ({
         rewardOptions: [],
         lastClearedBoss: false,
         runSummary: null,
+        profile: null,
         player: {
           // server may seed a meta HP bonus (M5.3); fall back to base for older backends
           hp: res.hp ?? cfg.playerStartingHp,
@@ -156,6 +168,10 @@ export const useCombat = create<CombatState>()((set, get) => ({
         },
         phase: "map",
       });
+      // best-effort: surface banked meta (Insight, unlocked relics) on the map — non-blocking
+      getProfile(campaignId)
+        .then((p) => set({ profile: p }))
+        .catch(() => {});
     } catch (e) {
       set({ phase: "error", error: e instanceof Error ? e.message : String(e) });
     }
@@ -234,18 +250,29 @@ export const useCombat = create<CombatState>()((set, get) => ({
     const s = get();
     if (!s.game) return;
     if (s.player.hp <= 0) {
-      // Server already banked + marked the run defeated on the killing /answer; finish here is
-      // idempotent and returns the persisted meta summary for the death screen. Set phase first
-      // so the UI isn't blocked on the request, then patch in the summary.
-      set({ phase: "defeat" });
-      if (s.sessionId) {
-        try {
-          const summary = await finishPlay(s.sessionId);
-          set({ runSummary: summary });
-        } catch {
-          /* leave runSummary null → ResultScreen falls back to in-memory player */
-        }
-      }
+      // The server banked progress and marked the run defeated on the killing /answer, and that
+      // response (lastResult) carries the meta earned THIS run. Use it directly — finish_play on
+      // an already-defeated run can't recompute the delta-based Insight, so it would report 0.
+      const r = s.lastResult;
+      set({
+        phase: "defeat",
+        runSummary: r
+          ? {
+              status: "defeated",
+              outcome: "defeated",
+              score: r.score,
+              xp: r.xp,
+              hp: r.hp,
+              level: r.level,
+              insightEarned: r.insightEarned,
+              insightTotal: r.insightTotal,
+              newlyUnlocked: r.newlyUnlocked,
+              masteryByTopic: r.masteryByTopic,
+              bestScore: r.bestScore,
+              isNewBest: r.isNewBest,
+            }
+          : null,
+      });
       return;
     }
     const enc = s.activeEncounter();
@@ -326,5 +353,6 @@ export const useCombat = create<CombatState>()((set, get) => ({
       lastResult: null,
       submitting: false,
       runSummary: null,
+      profile: null,
     }),
 }));

@@ -127,6 +127,14 @@ export interface AnswerResult {
   xp: number;
   level: number;
   playerDown: boolean;
+  // meta banked on the killing blow (permadeath) — absent while the run is alive (M5.3)
+  outcome?: "in_progress" | "defeated";
+  insightEarned?: number;
+  insightTotal?: number;
+  newlyUnlocked?: Relic[];
+  masteryByTopic?: Record<string, TopicMastery>;
+  bestScore?: number;
+  isNewBest?: boolean;
 }
 
 export interface TopicMastery {
@@ -149,6 +157,7 @@ export interface FinishResult {
   newlyUnlocked?: Relic[];
   masteryByTopic?: Record<string, TopicMastery>;
   bestScore?: number;
+  isNewBest?: boolean;
 }
 
 export type RunSummary = FinishResult;

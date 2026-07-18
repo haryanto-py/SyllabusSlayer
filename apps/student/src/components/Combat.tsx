@@ -323,7 +323,7 @@ function ResultScreen() {
   const mastery = Object.entries(summary?.masteryByTopic ?? {}).sort(
     (a, b) => b[1].accuracy - a[1].accuracy,
   );
-  const isBest = summary?.bestScore != null && score > 0 && score >= summary.bestScore;
+  const isBest = summary?.isNewBest === true; // server decides (folds this run into bestScore)
 
   return (
     <div className="mx-auto flex w-full max-w-lg flex-1 flex-col items-center justify-center gap-5 px-5 py-10 text-center">
@@ -338,66 +338,70 @@ function ResultScreen() {
         {isBest && <p className="mt-1 text-sm font-semibold text-amber-300">🏅 New personal best!</p>}
       </motion.div>
 
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.1 }}
-        className="w-full rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5 text-left"
-      >
-        <div className="flex items-center justify-between">
-          <span className="font-semibold text-sky-300">🔮 Insight earned</span>
-          <span className="text-lg font-bold text-sky-200">+{insightEarned}</span>
-        </div>
-        {insightTotal != null && (
-          <p className="mt-0.5 text-xs text-zinc-500">{insightTotal} total banked</p>
-        )}
+      {summary != null ? (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          className="w-full rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5 text-left"
+        >
+          <div className="flex items-center justify-between">
+            <span className="font-semibold text-sky-300">🔮 Insight earned</span>
+            <span className="text-lg font-bold text-sky-200">+{insightEarned}</span>
+          </div>
+          {insightTotal != null && (
+            <p className="mt-0.5 text-xs text-zinc-500">{insightTotal} total banked</p>
+          )}
 
-        {mastery.length > 0 && (
-          <div className="mt-4">
-            <p className="mb-2 text-xs uppercase tracking-wide text-zinc-500">Topic mastery</p>
-            <div className="flex flex-col gap-2">
-              {mastery.map(([topic, m]) => (
-                <div key={topic} className="flex items-center gap-3">
-                  <span className="w-32 shrink-0 truncate text-sm text-zinc-300" title={topic}>
-                    {topic}
-                  </span>
-                  <div className="h-2 flex-1 overflow-hidden rounded-full bg-zinc-800">
-                    <div
-                      className={`h-full ${m.accuracy >= 0.8 ? "bg-emerald-500" : "bg-amber-500"}`}
-                      style={{ width: `${Math.round(m.accuracy * 100)}%` }}
-                    />
+          {mastery.length > 0 && (
+            <div className="mt-4">
+              <p className="mb-2 text-xs uppercase tracking-wide text-zinc-500">Topic mastery</p>
+              <div className="flex flex-col gap-2">
+                {mastery.map(([topic, m]) => (
+                  <div key={topic} className="flex items-center gap-3">
+                    <span className="w-32 shrink-0 truncate text-sm text-zinc-300" title={topic}>
+                      {topic}
+                    </span>
+                    <div className="h-2 flex-1 overflow-hidden rounded-full bg-zinc-800">
+                      <div
+                        className={`h-full ${m.accuracy >= 0.8 ? "bg-emerald-500" : "bg-amber-500"}`}
+                        style={{ width: `${Math.round(m.accuracy * 100)}%` }}
+                      />
+                    </div>
+                    <span className="w-10 shrink-0 text-right text-xs text-zinc-400">
+                      {Math.round(m.accuracy * 100)}%
+                    </span>
                   </div>
-                  <span className="w-10 shrink-0 text-right text-xs text-zinc-400">
-                    {Math.round(m.accuracy * 100)}%
+                ))}
+              </div>
+            </div>
+          )}
+
+          {newly.length > 0 && (
+            <div className="mt-4">
+              <p className="mb-2 text-xs uppercase tracking-wide text-zinc-500">Relics unlocked</p>
+              <div className="flex flex-wrap gap-1.5">
+                {newly.map((r) => (
+                  <span
+                    key={r.relicId}
+                    title={r.description}
+                    className="flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-xs text-amber-200"
+                  >
+                    <span>{r.icon}</span>
+                    {r.name}
                   </span>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {newly.length > 0 && (
-          <div className="mt-4">
-            <p className="mb-2 text-xs uppercase tracking-wide text-zinc-500">Relics unlocked</p>
-            <div className="flex flex-wrap gap-1.5">
-              {newly.map((r) => (
-                <span
-                  key={r.relicId}
-                  title={r.description}
-                  className="flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-xs text-amber-200"
-                >
-                  <span>{r.icon}</span>
-                  {r.name}
-                </span>
-              ))}
-            </div>
-          </div>
-        )}
-
-        <p className="mt-4 border-t border-zinc-800 pt-3 text-xs italic text-zinc-500">
-          Insight rewards what you learned, not how long you played. Relics never answer for you.
-        </p>
-      </motion.div>
+          <p className="mt-4 border-t border-zinc-800 pt-3 text-xs italic text-zinc-500">
+            Insight rewards what you learned, not how long you played. Relics never answer for you.
+          </p>
+        </motion.div>
+      ) : (
+        <p className="text-sm text-zinc-400">Your progress was saved.</p>
+      )}
 
       <div className="flex justify-center gap-3">
         {game && (

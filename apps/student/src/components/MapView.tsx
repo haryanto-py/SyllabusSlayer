@@ -18,6 +18,7 @@ export default function MapView() {
   const selectNode = useCombat((s) => s.selectNode);
   const lastRestHeal = useCombat((s) => s.lastRestHeal);
   const totalActs = useCombat((s) => s.totalActs());
+  const profile = useCombat((s) => s.profile);
 
   const act = game?.acts[actIndex];
   if (!act) return null;
@@ -39,6 +40,12 @@ export default function MapView() {
       <div className="text-center text-xs uppercase tracking-widest text-zinc-500">
         {act.title} · Act {actIndex + 1}/{totalActs} · choose your path
       </div>
+      {profile && (profile.insight > 0 || profile.unlockedRelics.length > 0) ? (
+        <p className="text-center text-xs text-sky-300/80">
+          🔮 {profile.insight} Insight · {profile.unlockedRelics.length} relics unlocked
+          {profile.startBonusMaxHp > 0 ? ` · +${profile.startBonusMaxHp} start HP` : ""}
+        </p>
+      ) : null}
       {lastRestHeal ? (
         <p className="text-center text-sm text-emerald-300">Rested · +{lastRestHeal} HP</p>
       ) : null}

@@ -105,13 +105,16 @@ def _bank_progress(session: Session, ps: PlaySession, campaign: Campaign | None)
     merged = meta.merge_mastery(prior_mastery, topics)
     newly = meta.newly_unlocked_relics(merged, progress.unlocked_relics)
 
+    prior_best = progress.best_score or 0
+    is_new_best = (ps.final_score or 0) > prior_best  # strict improvement, computed before max()
+
     progress.mastery_by_topic = merged
     flag_modified(progress, "mastery_by_topic")  # SQLAlchemy misses in-place JSON edits
     progress.unlocked_relics = sorted(set(progress.unlocked_relics or []) | set(newly))
     flag_modified(progress, "unlocked_relics")
     progress.meta_currency = (progress.meta_currency or 0) + insight_earned
-    progress.best_score = max(progress.best_score or 0, ps.final_score or 0)
-    progress.total_xp = max(progress.total_xp or 0, ps.final_xp or 0)
+    progress.best_score = max(prior_best, ps.final_score or 0)
+    progress.total_xp = (progress.total_xp or 0) + (ps.final_xp or 0)  # cumulative across runs
     progress.level = scoring.level_for_xp(progress.total_xp, cfg)
     progress.updated_at = datetime.now(UTC)
     session.add(progress)
@@ -122,6 +125,7 @@ def _bank_progress(session: Session, ps: PlaySession, campaign: Campaign | None)
         "newlyUnlocked": [relics.relic_public(r) for r in newly if r in relics.RELICS],
         "masteryByTopic": merged,
         "bestScore": progress.best_score,
+        "isNewBest": is_new_best,
         "level": progress.level,
     }
 
@@ -234,8 +238,12 @@ def submit_answer(
     # learning is never lost on a loss, THEN flip status — the in_progress guard above now 409s
     # any further /answer. The just-committed attempt is included in the banked mastery.
     outcome = "in_progress"
+    death: dict = {}
     if ps.hp_remaining <= 0:
-        _bank_progress(session, ps, campaign)
+        # Bank BEFORE the status flip; capture the summary so the death screen can show the
+        # Insight/relics actually earned this run (award_insight is delta-vs-peak, so these
+        # values are only computable here — finish_play on a defeated run can't recover them).
+        death = _bank_progress(session, ps, campaign)
         ps.status = SessionStatus.defeated
         ps.completed_at = datetime.now(UTC)
         session.add(ps)
@@ -254,9 +262,16 @@ def submit_answer(
         "maxHp": cfg.playerStartingHp + (ps.bonus_max_hp or 0),
         "score": ps.final_score,
         "xp": ps.final_xp,
-        "level": scoring.level_for_xp(ps.final_xp or 0, cfg),
+        "level": death.get("level", scoring.level_for_xp(ps.final_xp or 0, cfg)),
         "playerDown": ps.hp_remaining <= 0,
         "outcome": outcome,
+        # meta banked on the killing blow (empty defaults while the run is still alive)
+        "insightEarned": death.get("insightEarned", 0),
+        "insightTotal": death.get("insightTotal"),
+        "newlyUnlocked": death.get("newlyUnlocked", []),
+        "masteryByTopic": death.get("masteryByTopic", {}),
+        "bestScore": death.get("bestScore"),
+        "isNewBest": death.get("isNewBest", False),
     }
 
 
@@ -286,6 +301,7 @@ def finish_play(
             "newlyUnlocked": [],
             "masteryByTopic": (progress.mastery_by_topic if progress else {}) or {},
             "bestScore": (progress.best_score if progress else ps.final_score) or 0,
+            "isNewBest": False,  # no new terminal transition this call
             "level": progress.level if progress else scoring.level_for_xp(ps.final_xp or 0, cfg),
         }
     outcome = "defeated" if ps.status == SessionStatus.defeated else "completed"
@@ -301,6 +317,7 @@ def finish_play(
         "newlyUnlocked": summary["newlyUnlocked"],
         "masteryByTopic": summary["masteryByTopic"],
         "bestScore": summary["bestScore"],
+        "isNewBest": summary.get("isNewBest", False),
     }
 
 

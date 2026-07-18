@@ -230,6 +230,8 @@ def test_meta_permadeath_and_bank_on_death(tmp_path):
             if last["playerDown"]:
                 break
         assert last["playerDown"] and last["outcome"] == "defeated" and last["hp"] == 0
+        # the killing /answer surfaces the meta banked THIS run (not a stale 0)
+        assert last["insightEarned"] > 0 and last["newlyUnlocked"]
 
         # server-enforced permadeath: a dead run cannot be continued
         dead = client.post(f"/student/play/{sid}/answer",
@@ -263,17 +265,33 @@ def test_meta_victory_banks_idempotent_and_upsert(tmp_path):
         assert fin["insightEarned"] > 0
         assert "Act" in fin["masteryByTopic"]
         assert any(r["relicId"] in ("keen_focus", "aegis") for r in fin["newlyUnlocked"])
-        assert fin["bestScore"] == fin["score"]
+        assert fin["bestScore"] == fin["score"] and fin["isNewBest"] is True
         total = fin["insightTotal"]
 
-        # repeat /finish is idempotent — no double award, no duplicate row
+        # repeat /finish is idempotent — no double award, no duplicate row, no false "best"
         again = client.post(f"/student/play/{sid}/finish").json()
         assert again["insightEarned"] == 0 and again["insightTotal"] == total
+        assert again["isNewBest"] is False
         with Session(engine) as s:
             rows = s.exec(
                 select(StudentProgress).where(StudentProgress.campaign_id == "camp1")
             ).all()
             assert len(rows) == 1
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_meta_total_xp_accumulates_across_runs(tmp_path):
+    _meta_env(tmp_path, "xp.db")
+    try:
+        client = TestClient(app)
+        for _ in range(2):  # two runs, each banks one correct easy answer (10 XP)
+            sid = client.post("/student/play/camp1/start").json()["session_id"]
+            client.post(f"/student/play/{sid}/answer",
+                        json={"encounter_id": "e1", "question_id": "q1", "answer": "a"})
+            client.post(f"/student/play/{sid}/finish")
+        prof = client.get("/student/campaigns/camp1/profile").json()
+        assert prof["totalXp"] == 20  # cumulative across runs, not a per-run max
     finally:
         app.dependency_overrides.clear()
 

@@ -89,6 +89,13 @@ def award_insight(current: list[dict], prior: dict | None) -> int:
     an evidence credit ``min(1, attempts / MIN_ATTEMPTS)``. Because ``prior`` holds the sticky
     peak, replaying an already-mastered topic yields ~0 — grinding cannot buy power; only
     learning something new pays.
+
+    KNOWN LIMITATION (deferred): a learner who demonstrates a topic across MULTIPLE sessions is
+    slightly under-paid vs one who does it in a single session — the peak moves on the first
+    (thin-evidence) run, so the deferred half of the evidence credit is never paid on the later
+    completing run. This has NO gameplay effect today (Insight is only accumulated/displayed, not
+    yet spendable). Revisit when the "Mirror of Study" spend shop lands: track per-topic
+    insight-already-paid and mint the positive difference instead of differencing raw peak.
     """
     prior = prior or {}
     total = 0.0
