@@ -322,6 +322,70 @@ def test_relic_reward_options_exclude_owned_and_deterministic():
     assert relics.reward_options(["keen_focus"], "s:1") == relics.reward_options(["keen_focus"], "s:1")
 
 
+def test_relic_reward_options_allowed_gate():
+    from app.services import relics
+
+    only = relics.reward_options(owned=[], seed="s:1", n=3, allowed={"keen_focus"})
+    assert [o["relicId"] for o in only] == ["keen_focus"]  # pool gated to the allowed set
+    legacy = relics.reward_options(owned=[], seed="s:1", n=3, allowed=None)
+    assert len(legacy) == 3  # None preserves pre-M5.3 behavior
+
+
+# --- meta-progression (M5.3) ------------------------------------------------ #
+def test_meta_award_insight_rewards_learning_not_grinding():
+    from app.services import meta
+
+    fresh = [{"topic": "A", "attempts": 4, "correct": 4, "accuracy": 1.0}]
+    assert meta.award_insight(fresh, prior={}) == 100  # 100 * 1.0 delta * full credit
+
+    # replaying an already-mastered topic pays ~0 (the anti-grind guardrail, as an assertion)
+    prior = {"A": {"attempts": 4, "correct": 4, "accuracy": 1.0}}
+    grind = [{"topic": "A", "attempts": 8, "correct": 8, "accuracy": 1.0}]
+    assert meta.award_insight(grind, prior) == 0
+
+    # partial evidence earns partial insight (min-attempts credit)
+    thin = [{"topic": "B", "attempts": 2, "correct": 2, "accuracy": 1.0}]
+    assert meta.award_insight(thin, prior={}) == 50  # 100 * 1.0 * (2/4)
+
+
+def test_meta_merge_mastery_is_monotonic():
+    from app.services import meta
+
+    prior = {"A": {"attempts": 4, "correct": 4, "accuracy": 1.0}}
+    worse = [{"topic": "A", "attempts": 8, "correct": 6, "accuracy": 0.75}]
+    merged = meta.merge_mastery(prior, worse)
+    assert merged["A"]["accuracy"] == 1.0  # a bad run never lowers a proven topic
+    assert merged["A"]["attempts"] == 8  # ...but cumulative counts still advance
+
+
+def test_meta_unlock_gating():
+    from app.services import meta
+
+    none_mastered = {"A": {"attempts": 4, "correct": 2, "accuracy": 0.5}}  # below threshold
+    assert set(meta.newly_unlocked_relics(none_mastered, [])) == set(meta.STARTER_RELICS)
+
+    too_few = {"A": {"attempts": 2, "correct": 2, "accuracy": 1.0}}  # not enough attempts
+    assert set(meta.newly_unlocked_relics(too_few, [])) == set(meta.STARTER_RELICS)
+
+    one_mastered = {"A": {"attempts": 4, "correct": 4, "accuracy": 1.0}}
+    newly = meta.newly_unlocked_relics(one_mastered, list(meta.STARTER_RELICS))
+    assert newly == [meta.UNLOCK_ORDER[0]]  # exactly one new relic, beyond the starters
+    # idempotent: already-unlocked relics are not re-reported
+    assert meta.newly_unlocked_relics(one_mastered, meta.unlocked_pool(one_mastered)) == []
+
+
+def test_meta_start_bonus_monotonic_and_capped():
+    from app.services import meta
+
+    def mastery(n: int) -> dict:
+        return {f"T{i}": {"attempts": 4, "correct": 4, "accuracy": 1.0} for i in range(n)}
+
+    assert meta.start_bonus_max_hp(mastery(0)) == 0
+    assert meta.start_bonus_max_hp(mastery(1)) == meta.HP_PER_MASTERED_TOPIC
+    assert meta.start_bonus_max_hp(mastery(2)) > meta.start_bonus_max_hp(mastery(1))
+    assert meta.start_bonus_max_hp(mastery(100)) == meta.HP_BONUS_CAP  # hard cap holds
+
+
 # --- schema validator ------------------------------------------------------- #
 def test_question_validator_rejects_bad_mcq():
     with pytest.raises(ValidationError):

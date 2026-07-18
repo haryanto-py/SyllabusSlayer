@@ -14,6 +14,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+from sqlalchemy.orm.attributes import flag_modified
 from sqlmodel import Session, select
 
 from app.core.db import get_session
@@ -26,10 +27,11 @@ from app.models.tables import (
     PlaySession,
     QuestionAttempt,
     SessionStatus,
+    StudentProgress,
     User,
 )
 from app.schemas.game import CombatConfig
-from app.services import relics, runmap, scoring
+from app.services import analytics, meta, relics, runmap, scoring
 from app.services.users import get_or_create_user
 
 router = APIRouter(prefix="/student", tags=["student"], dependencies=[Depends(require_student)])
@@ -44,6 +46,84 @@ def _load_session(session: Session, session_id: str, user: User) -> PlaySession:
 
 def _cfg(campaign: Campaign) -> CombatConfig:
     return CombatConfig.model_validate(campaign.combat_config or {})
+
+
+def _load_progress(session: Session, student_id: str, campaign_id: str) -> StudentProgress | None:
+    return session.exec(
+        select(StudentProgress).where(
+            StudentProgress.student_id == student_id,
+            StudentProgress.campaign_id == campaign_id,
+        )
+    ).first()
+
+
+def _unlocked_set(progress: StudentProgress | None) -> set[str]:
+    """Relic ids the caller may be offered/granted (defaults to the starter pool)."""
+    if progress and progress.unlocked_relics:
+        return set(progress.unlocked_relics)
+    return set(meta.STARTER_RELICS)
+
+
+def _bank_progress(session: Session, ps: PlaySession, campaign: Campaign | None) -> dict:
+    """The SINGLE writer of StudentProgress. Called on BOTH defeat and victory so demonstrated
+    learning banks identically win-or-lose. Recomputes cumulative per-topic mastery from ALL of
+    this student's attempts on the campaign, mints Insight from the fresh-mastery delta, unlocks
+    relics, and rolls up best_score/total_xp. Pure balance math lives in services/meta.py.
+    Returns a summary dict for the run-end response.
+    """
+    cfg = _cfg(campaign) if campaign else CombatConfig()
+    game = campaign.game_json if campaign else None
+
+    sess_ids = [
+        s.id
+        for s in session.exec(
+            select(PlaySession).where(
+                PlaySession.student_id == ps.student_id,
+                PlaySession.campaign_id == ps.campaign_id,
+            )
+        ).all()
+    ]
+    attempts: list = (
+        session.exec(
+            select(QuestionAttempt).where(QuestionAttempt.session_id.in_(sess_ids))
+        ).all()
+        if sess_ids
+        else []
+    )
+    topics: list[dict] = []
+    if game:
+        qindex = analytics.build_question_index(game)
+        topics, _ = analytics.aggregate(attempts, qindex)
+
+    progress = _load_progress(session, ps.student_id, ps.campaign_id)
+    if progress is None:
+        progress = StudentProgress(student_id=ps.student_id, campaign_id=ps.campaign_id)
+        session.add(progress)
+
+    prior_mastery = progress.mastery_by_topic or {}
+    insight_earned = meta.award_insight(topics, prior_mastery)
+    merged = meta.merge_mastery(prior_mastery, topics)
+    newly = meta.newly_unlocked_relics(merged, progress.unlocked_relics)
+
+    progress.mastery_by_topic = merged
+    flag_modified(progress, "mastery_by_topic")  # SQLAlchemy misses in-place JSON edits
+    progress.unlocked_relics = sorted(set(progress.unlocked_relics or []) | set(newly))
+    flag_modified(progress, "unlocked_relics")
+    progress.meta_currency = (progress.meta_currency or 0) + insight_earned
+    progress.best_score = max(progress.best_score or 0, ps.final_score or 0)
+    progress.total_xp = max(progress.total_xp or 0, ps.final_xp or 0)
+    progress.level = scoring.level_for_xp(progress.total_xp, cfg)
+    progress.updated_at = datetime.now(UTC)
+    session.add(progress)
+
+    return {
+        "insightEarned": insight_earned,
+        "insightTotal": progress.meta_currency,
+        "newlyUnlocked": [relics.relic_public(r) for r in newly if r in relics.RELICS],
+        "masteryByTopic": merged,
+        "bestScore": progress.best_score,
+        "level": progress.level,
+    }
 
 
 @router.get("/me")
@@ -63,12 +143,15 @@ def start_play(
     if not campaign or not campaign.game_json:
         raise HTTPException(404, "campaign not found")
     cfg = _cfg(campaign)
+    progress = _load_progress(session, user.id, campaign_id)
+    bonus_hp = meta.start_bonus_max_hp(progress.mastery_by_topic if progress else None)
     ps = PlaySession(
         campaign_id=campaign_id,
         assignment_id=assignment_id,
         student_id=user.id,
         status=SessionStatus.in_progress,
-        hp_remaining=cfg.playerStartingHp,
+        hp_remaining=cfg.playerStartingHp + bonus_hp,  # meta bonus routes through HP only
+        bonus_max_hp=bonus_hp,
         final_score=0,
         final_xp=0,
     )
@@ -85,6 +168,9 @@ def start_play(
         "session_id": ps.id,
         "combatConfig": cfg.model_dump(mode="json"),
         "game": game,
+        "hp": ps.hp_remaining,
+        "maxHp": cfg.playerStartingHp + bonus_hp,
+        "startBonusMaxHp": bonus_hp,
     }
 
 
@@ -144,6 +230,18 @@ def submit_answer(
     session.add(ps)
     session.commit()
 
+    # Permadeath (server-authoritative): HP 0 ends the run. Bank progress FIRST so this-run
+    # learning is never lost on a loss, THEN flip status — the in_progress guard above now 409s
+    # any further /answer. The just-committed attempt is included in the banked mastery.
+    outcome = "in_progress"
+    if ps.hp_remaining <= 0:
+        _bank_progress(session, ps, campaign)
+        ps.status = SessionStatus.defeated
+        ps.completed_at = datetime.now(UTC)
+        session.add(ps)
+        session.commit()
+        outcome = "defeated"
+
     return {
         "isCorrect": result["is_correct"],
         "correctAnswer": result["correct"],
@@ -158,6 +256,7 @@ def submit_answer(
         "xp": ps.final_xp,
         "level": scoring.level_for_xp(ps.final_xp or 0, cfg),
         "playerDown": ps.hp_remaining <= 0,
+        "outcome": outcome,
     }
 
 
@@ -172,16 +271,36 @@ def finish_play(
     campaign = session.get(Campaign, ps.campaign_id)
     cfg = _cfg(campaign) if campaign else CombatConfig()
     if ps.status == SessionStatus.in_progress:
+        # Victory / voluntary finish: bank once, then complete. A run already ended by
+        # permadeath (submit_answer) skips this guard, so meta is never double-awarded.
+        summary = _bank_progress(session, ps, campaign)
         ps.status = SessionStatus.completed
         ps.completed_at = datetime.now(UTC)
         session.add(ps)
         session.commit()
+    else:
+        progress = _load_progress(session, ps.student_id, ps.campaign_id)
+        summary = {
+            "insightEarned": 0,  # already banked at the terminal transition
+            "insightTotal": (progress.meta_currency if progress else 0) or 0,
+            "newlyUnlocked": [],
+            "masteryByTopic": (progress.mastery_by_topic if progress else {}) or {},
+            "bestScore": (progress.best_score if progress else ps.final_score) or 0,
+            "level": progress.level if progress else scoring.level_for_xp(ps.final_xp or 0, cfg),
+        }
+    outcome = "defeated" if ps.status == SessionStatus.defeated else "completed"
     return {
         "status": ps.status.value,
+        "outcome": outcome,
         "score": ps.final_score or 0,
         "xp": ps.final_xp or 0,
         "hp": ps.hp_remaining,
-        "level": scoring.level_for_xp(ps.final_xp or 0, cfg),
+        "level": summary["level"],
+        "insightEarned": summary["insightEarned"],
+        "insightTotal": summary["insightTotal"],
+        "newlyUnlocked": summary["newlyUnlocked"],
+        "masteryByTopic": summary["masteryByTopic"],
+        "bestScore": summary["bestScore"],
     }
 
 
@@ -220,7 +339,11 @@ def reward_options(
 ) -> dict:
     user = get_or_create_user(session, current)
     ps = _load_session(session, session_id, user)
-    return {"options": relics.reward_options(ps.relics, seed=f"{ps.id}:{node_id}")}
+    progress = _load_progress(session, ps.student_id, ps.campaign_id)
+    allowed = _unlocked_set(progress)  # only meta-unlocked relics are ever offered
+    return {
+        "options": relics.reward_options(ps.relics, seed=f"{ps.id}:{node_id}", allowed=allowed)
+    }
 
 
 class RewardIn(BaseModel):
@@ -240,6 +363,9 @@ def take_reward(
     cfg = _cfg(campaign) if campaign else CombatConfig()
     if body.relic_id not in relics.RELICS:
         raise HTTPException(404, "unknown relic")
+    progress = _load_progress(session, ps.student_id, ps.campaign_id)
+    if body.relic_id not in _unlocked_set(progress):  # server rejects a locked relic
+        raise HTTPException(403, "relic not unlocked")
     owned = list(ps.relics or [])
     if body.relic_id not in owned:
         owned.append(body.relic_id)
@@ -254,6 +380,28 @@ def take_reward(
         "relics": [relics.relic_public(r) for r in (ps.relics or [])],
         "hp": ps.hp_remaining,
         "maxHp": _max_hp(ps, cfg),
+    }
+
+
+@router.get("/campaigns/{campaign_id}/profile")
+def campaign_profile(
+    campaign_id: str,
+    session: Session = Depends(get_session),
+    current: CurrentUser = Depends(require_student),
+) -> dict:
+    """The caller's persisted meta-progression for a campaign (default shape if no runs yet)."""
+    user = get_or_create_user(session, current)
+    progress = _load_progress(session, user.id, campaign_id)
+    mastery = (progress.mastery_by_topic if progress else {}) or {}
+    unlocked = sorted(_unlocked_set(progress))
+    return {
+        "level": progress.level if progress else 1,
+        "totalXp": progress.total_xp if progress else 0,
+        "bestScore": (progress.best_score if progress else 0) or 0,
+        "insight": progress.meta_currency if progress else 0,
+        "masteryByTopic": mastery,
+        "unlockedRelics": [relics.relic_public(r) for r in unlocked if r in relics.RELICS],
+        "startBonusMaxHp": meta.start_bonus_max_hp(mastery),
     }
 
 

@@ -85,9 +85,21 @@ def relic_public(relic_id: str) -> dict:
     }
 
 
-def reward_options(owned: list[str] | None, seed: str, n: int = 3) -> list[dict]:
-    """Return up to n relic choices the player doesn't already own (deterministic per seed)."""
+def reward_options(
+    owned: list[str] | None,
+    seed: str,
+    n: int = 3,
+    allowed: set[str] | None = None,
+) -> list[dict]:
+    """Return up to n relic choices the player doesn't already own (deterministic per seed).
+
+    ``allowed`` gates the pool to a meta-unlocked set (M5.3); ``None`` = all relics (legacy).
+    """
     rng = random.Random(seed)
-    pool = [rid for rid in RELICS if rid not in (owned or [])]
+    pool = [
+        rid
+        for rid in RELICS
+        if rid not in (owned or []) and (allowed is None or rid in allowed)
+    ]
     rng.shuffle(pool)
     return [relic_public(rid) for rid in pool[:n]]

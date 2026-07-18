@@ -52,7 +52,8 @@ class CampaignStatus(str, Enum):
 class SessionStatus(str, Enum):
     in_progress = "in_progress"
     completed = "completed"
-    abandoned = "abandoned"
+    defeated = "defeated"  # permadeath: HP hit 0 (server-authoritative, M5.3)
+    abandoned = "abandoned"  # reserved: explicit quit/timeout (not yet written)
 
 
 # --------------------------------------------------------------------------- #
@@ -176,4 +177,7 @@ class StudentProgress(SQLModel, table=True):
     mastery_by_topic: dict | None = Field(default=None, sa_column=Column(JSON))
     relics: list | None = Field(default=None, sa_column=Column(JSON))
     best_score: int | None = None
+    # M5.3 meta-progression: soft currency + permanently unlocked relic pool.
+    meta_currency: int = 0  # "Insight" — minted by demonstrated-mastery delta
+    unlocked_relics: list | None = Field(default=None, sa_column=Column(JSON))
     updated_at: datetime = Field(default_factory=_now)

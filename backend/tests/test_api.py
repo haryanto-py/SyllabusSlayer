@@ -180,6 +180,145 @@ def test_student_play_flow(tmp_path):
         app.dependency_overrides.clear()
 
 
+# --------------------------------------------------------------------------- #
+# M5.3 meta-progression + permadeath
+# --------------------------------------------------------------------------- #
+def _meta_env(tmp_path, dbname: str, student: str = "stud1"):
+    """Seed a campaign + student and override auth as that student. Caller clears overrides."""
+    from app.core.security import CurrentUser, get_current_user
+    from app.models.tables import Campaign, CampaignStatus, User, UserRole
+
+    engine = create_engine(
+        f"sqlite:///{tmp_path / dbname}", connect_args={"check_same_thread": False}
+    )
+    SQLModel.metadata.create_all(engine)
+    game = _seed_game()
+    with Session(engine) as s:
+        s.add(User(id=student, email=f"{student}@x", role=UserRole.student,
+                   display_name="s", auth_provider_id=student))
+        s.add(Campaign(id="camp1", document_id="docX", teacher_id="t1", title="T",
+                       status=CampaignStatus.ready, game_json=game,
+                       combat_config=game["combatConfig"], schema_version="1.0.0"))
+        s.commit()
+
+    def _override():
+        with Session(engine) as session:
+            yield session
+
+    app.dependency_overrides[get_session] = _override
+    app.dependency_overrides[get_current_user] = lambda: CurrentUser(
+        sub=student, email=f"{student}@x", role="student"
+    )
+    return engine
+
+
+def test_meta_permadeath_and_bank_on_death(tmp_path):
+    _meta_env(tmp_path, "death.db")
+    try:
+        client = TestClient(app)
+        start = client.post("/student/play/camp1/start").json()
+        assert start["hp"] == 100 and start["maxHp"] == 100 and start["startBonusMaxHp"] == 0
+        sid = start["session_id"]
+
+        # bank one correct answer, then die on repeated wrong answers (8 HP each)
+        client.post(f"/student/play/{sid}/answer",
+                    json={"encounter_id": "e1", "question_id": "q1", "answer": "a"})
+        last = None
+        for _ in range(20):
+            last = client.post(f"/student/play/{sid}/answer",
+                               json={"encounter_id": "e1", "question_id": "q2", "answer": False}).json()
+            if last["playerDown"]:
+                break
+        assert last["playerDown"] and last["outcome"] == "defeated" and last["hp"] == 0
+
+        # server-enforced permadeath: a dead run cannot be continued
+        dead = client.post(f"/student/play/{sid}/answer",
+                           json={"encounter_id": "e1", "question_id": "q1", "answer": "a"})
+        assert dead.status_code == 409
+
+        # learning banked despite the loss
+        prof = client.get("/student/campaigns/camp1/profile").json()
+        assert "Act" in prof["masteryByTopic"]
+        assert prof["bestScore"] == 10  # the one correct answer's damage, persisted
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_meta_victory_banks_idempotent_and_upsert(tmp_path):
+    from sqlmodel import select
+
+    from app.models.tables import StudentProgress
+
+    engine = _meta_env(tmp_path, "victory.db")
+    try:
+        client = TestClient(app)
+        sid = client.post("/student/play/camp1/start").json()["session_id"]
+        client.post(f"/student/play/{sid}/answer",
+                    json={"encounter_id": "e1", "question_id": "q1", "answer": "a"})
+        client.post(f"/student/play/{sid}/answer",
+                    json={"encounter_id": "e1", "question_id": "q2", "answer": True})
+
+        fin = client.post(f"/student/play/{sid}/finish").json()
+        assert fin["status"] == "completed" and fin["outcome"] == "completed"
+        assert fin["insightEarned"] > 0
+        assert "Act" in fin["masteryByTopic"]
+        assert any(r["relicId"] in ("keen_focus", "aegis") for r in fin["newlyUnlocked"])
+        assert fin["bestScore"] == fin["score"]
+        total = fin["insightTotal"]
+
+        # repeat /finish is idempotent — no double award, no duplicate row
+        again = client.post(f"/student/play/{sid}/finish").json()
+        assert again["insightEarned"] == 0 and again["insightTotal"] == total
+        with Session(engine) as s:
+            rows = s.exec(
+                select(StudentProgress).where(StudentProgress.campaign_id == "camp1")
+            ).all()
+            assert len(rows) == 1
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_meta_start_seed_reward_gating_and_guardrail(tmp_path):
+    from app.services import meta
+
+    _meta_env(tmp_path, "seed.db")
+    try:
+        client = TestClient(app)
+        # master "Act": 4 attempts, all correct (accuracy 1.0 >= threshold over >= min attempts)
+        sid = client.post("/student/play/camp1/start").json()["session_id"]
+        for qid, ans in [("q1", "a"), ("q2", True), ("q1", "a"), ("q2", True)]:
+            client.post(f"/student/play/{sid}/answer",
+                        json={"encounter_id": "e1", "question_id": qid, "answer": ans})
+        fin = client.post(f"/student/play/{sid}/finish").json()
+        assert fin["masteryByTopic"]["Act"]["accuracy"] == 1.0
+
+        prof = client.get("/student/campaigns/camp1/profile").json()
+        assert prof["startBonusMaxHp"] == meta.HP_PER_MASTERED_TOPIC  # 1 topic mastered
+        unlocked = {r["relicId"] for r in prof["unlockedRelics"]}
+        assert {"keen_focus", "aegis"} <= unlocked and meta.UNLOCK_ORDER[0] in unlocked
+
+        # a NEW run is seeded with the earned HP bonus
+        start2 = client.post("/student/play/camp1/start").json()
+        assert start2["startBonusMaxHp"] == meta.HP_PER_MASTERED_TOPIC
+        assert start2["hp"] == 105 and start2["maxHp"] == 105
+        sid2 = start2["session_id"]
+
+        # reward options only offer unlocked relics; a locked relic is rejected server-side
+        opts = client.get(f"/student/play/{sid2}/reward-options?node_id=n1").json()["options"]
+        assert {o["relicId"] for o in opts} <= unlocked
+        locked = "second_thought"  # rare, not unlocked after mastering one topic
+        assert locked not in unlocked
+        assert client.post(f"/student/play/{sid2}/reward",
+                           json={"relic_id": locked}).status_code == 403
+
+        # GUARDRAIL: meta is active, but a wrong answer is still wrong (correctness untouched)
+        wrong = client.post(f"/student/play/{sid2}/answer",
+                            json={"encounter_id": "e1", "question_id": "q1", "answer": "b"}).json()
+        assert wrong["isCorrect"] is False
+    finally:
+        app.dependency_overrides.clear()
+
+
 def test_classes_and_enrollment(tmp_path):
     app.dependency_overrides[get_session] = _temp_session_override(tmp_path)
     try:
