@@ -7,7 +7,8 @@ import { useEffect, useState } from "react";
 import { useCombat } from "@/lib/combatStore";
 import type { PlayQuestion } from "@/lib/types";
 
-import { HpBar, PlayerHud } from "./HpBar";
+import BattleCanvas, { ENEMY_EMOJI } from "./BattleCanvas";
+import { PlayerHud } from "./HpBar";
 import MapView from "./MapView";
 import RewardScreen from "./RewardScreen";
 
@@ -54,33 +55,35 @@ function Arena() {
   const player = useCombat((s) => s.player);
   const phase = useCombat((s) => s.phase);
   const questionIndex = useCombat((s) => s.questionIndex);
+  const lastResult = useCombat((s) => s.lastResult);
 
   if (!enc) return <Centered>…</Centered>;
 
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-5 px-5 py-8">
-      <motion.div
-        key={enc.encounterId}
-        initial={{ opacity: 0, y: -8 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="rounded-2xl border border-rose-900/50 bg-gradient-to-b from-rose-950/40 to-zinc-900 p-5"
-      >
-        <div className="flex items-center justify-between">
-          <div>
-            <span className="rounded bg-rose-500/20 px-2 py-0.5 text-[10px] font-semibold uppercase text-rose-300">
-              {enc.kind}
-            </span>
-            <h2 className="mt-1 text-lg font-bold text-zinc-100">{enc.enemyName}</h2>
-            <p className="text-xs italic text-zinc-400">{enc.enemyFlavor}</p>
-          </div>
-          <div className="text-right text-xs text-zinc-400">
-            HP {enemyHp}/{enemyMaxHp}
-          </div>
+    <div className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-4 px-5 py-6">
+      <div className="flex items-start justify-between">
+        <div>
+          <span className="rounded bg-rose-500/20 px-2 py-0.5 text-[10px] font-semibold uppercase text-rose-300">
+            {enc.kind}
+          </span>
+          <h2 className="mt-1 text-lg font-bold text-zinc-100">{enc.enemyName}</h2>
+          <p className="text-xs italic text-zinc-400">{enc.enemyFlavor}</p>
         </div>
-        <div className="mt-3">
-          <HpBar value={enemyHp} max={enemyMaxHp} color="bg-rose-500" />
+        <div className="text-right text-xs text-zinc-400">
+          HP {enemyHp}/{enemyMaxHp}
         </div>
-      </motion.div>
+      </div>
+
+      {/* Phaser battle arena: sprites + HP bars + juice (hit-stop / shake / particles). Purely
+          presentational — the DOM question card below stays the accessible source of truth. */}
+      <BattleCanvas
+        enemyName={enc.enemyName}
+        enemyEmoji={ENEMY_EMOJI[enc.kind] ?? "👾"}
+        enemyFrac={enemyMaxHp > 0 ? enemyHp / enemyMaxHp : 0}
+        playerFrac={player.maxHp > 0 ? player.hp / player.maxHp : 0}
+        lastResult={lastResult}
+        streak={player.streak}
+      />
 
       <PlayerHud player={player} />
 
