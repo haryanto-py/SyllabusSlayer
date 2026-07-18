@@ -108,6 +108,9 @@ export interface StartResponse {
   session_id: string;
   combatConfig: CombatConfig;
   game: PlayGame;
+  hp?: number;
+  maxHp?: number;
+  startBonusMaxHp?: number;
 }
 
 export interface AnswerResult {
@@ -126,12 +129,38 @@ export interface AnswerResult {
   playerDown: boolean;
 }
 
+export interface TopicMastery {
+  attempts: number;
+  correct: number;
+  accuracy: number;
+}
+
+// Server-authoritative run-end summary (M5.3). Superset of the old FinishResult so existing
+// callers keep working; the meta fields are absent only on pre-M5.3 backends.
 export interface FinishResult {
   status: string;
+  outcome?: "completed" | "defeated";
   score: number;
   xp: number;
   hp: number;
   level: number;
+  insightEarned?: number;
+  insightTotal?: number;
+  newlyUnlocked?: Relic[];
+  masteryByTopic?: Record<string, TopicMastery>;
+  bestScore?: number;
+}
+
+export type RunSummary = FinishResult;
+
+export interface StudentProfile {
+  level: number;
+  totalXp: number;
+  bestScore: number;
+  insight: number;
+  masteryByTopic: Record<string, TopicMastery>;
+  unlockedRelics: Relic[];
+  startBonusMaxHp: number;
 }
 
 export interface Relic {

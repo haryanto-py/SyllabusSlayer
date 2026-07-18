@@ -9,6 +9,7 @@ import type {
   RestResult,
   RewardResult,
   StartResponse,
+  StudentProfile,
 } from "./types";
 
 export async function startPlay(campaignId: string): Promise<StartResponse> {
@@ -36,6 +37,12 @@ export async function submitAnswer(sessionId: string, body: AnswerBody): Promise
 export async function finishPlay(sessionId: string): Promise<FinishResult> {
   return apiFetch<FinishResult>(`/student/play/${sessionId}/finish`, {
     method: "POST",
+    headers: await authHeaders("student"),
+  });
+}
+
+export async function getProfile(campaignId: string): Promise<StudentProfile> {
+  return apiFetch<StudentProfile>(`/student/campaigns/${campaignId}/profile`, {
     headers: await authHeaders("student"),
   });
 }

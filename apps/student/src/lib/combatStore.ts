@@ -12,6 +12,7 @@ import type {
   PlayEncounter,
   PlayGame,
   Relic,
+  RunSummary,
 } from "./types";
 
 export type Phase =
@@ -61,6 +62,9 @@ interface CombatState {
   rewardOptions: Relic[];
   lastClearedBoss: boolean;
 
+  // server-authoritative run-end summary (meta-progression, M5.3)
+  runSummary: RunSummary | null;
+
   start: (campaignId: string) => Promise<void>;
   selectNode: (nodeId: string) => Promise<void>;
   submit: (answer: unknown) => Promise<void>;
@@ -93,6 +97,7 @@ export const useCombat = create<CombatState>()((set, get) => ({
   lastResult: null,
   rewardOptions: [],
   lastClearedBoss: false,
+  runSummary: null,
 
   act: () => get().game?.acts[get().actIndex] ?? null,
   totalActs: () => get().game?.acts.length ?? 0,
@@ -138,9 +143,11 @@ export const useCombat = create<CombatState>()((set, get) => ({
         lastResult: null,
         rewardOptions: [],
         lastClearedBoss: false,
+        runSummary: null,
         player: {
-          hp: cfg.playerStartingHp,
-          maxHp: cfg.playerStartingHp,
+          // server may seed a meta HP bonus (M5.3); fall back to base for older backends
+          hp: res.hp ?? cfg.playerStartingHp,
+          maxHp: res.maxHp ?? cfg.playerStartingHp,
           streak: 0,
           xp: 0,
           level: 1,
@@ -227,8 +234,18 @@ export const useCombat = create<CombatState>()((set, get) => ({
     const s = get();
     if (!s.game) return;
     if (s.player.hp <= 0) {
+      // Server already banked + marked the run defeated on the killing /answer; finish here is
+      // idempotent and returns the persisted meta summary for the death screen. Set phase first
+      // so the UI isn't blocked on the request, then patch in the summary.
       set({ phase: "defeat" });
-      if (s.sessionId) finishPlay(s.sessionId).catch(() => {});
+      if (s.sessionId) {
+        try {
+          const summary = await finishPlay(s.sessionId);
+          set({ runSummary: summary });
+        } catch {
+          /* leave runSummary null → ResultScreen falls back to in-memory player */
+        }
+      }
       return;
     }
     const enc = s.activeEncounter();
@@ -284,8 +301,16 @@ export const useCombat = create<CombatState>()((set, get) => ({
           phase: "map",
         });
       } else {
+        // final boss cleared → victory. finish_play banks the run and returns the meta summary.
         set({ phase: "victory", activeNodeId: null, rewardOptions: [] });
-        if (s.sessionId) finishPlay(s.sessionId).catch(() => {});
+        if (s.sessionId) {
+          try {
+            const summary = await finishPlay(s.sessionId);
+            set({ runSummary: summary });
+          } catch {
+            /* leave runSummary null → ResultScreen falls back to in-memory player */
+          }
+        }
       }
       return;
     }
@@ -293,5 +318,13 @@ export const useCombat = create<CombatState>()((set, get) => ({
   },
 
   reset: () =>
-    set({ phase: "idle", error: null, sessionId: null, game: null, lastResult: null, submitting: false }),
+    set({
+      phase: "idle",
+      error: null,
+      sessionId: null,
+      game: null,
+      lastResult: null,
+      submitting: false,
+      runSummary: null,
+    }),
 }));

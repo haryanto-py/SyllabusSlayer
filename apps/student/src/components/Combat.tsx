@@ -308,40 +308,113 @@ function Feedback() {
 function ResultScreen() {
   const phase = useCombat((s) => s.phase);
   const player = useCombat((s) => s.player);
+  const summary = useCombat((s) => s.runSummary);
   const game = useCombat((s) => s.game);
   const start = useCombat((s) => s.start);
   const win = phase === "victory";
+
+  // Server-authoritative meta (M5.3); fall back to in-memory player if the finish call failed.
+  const score = summary?.score ?? player.score;
+  const xp = summary?.xp ?? player.xp;
+  const level = summary?.level ?? player.level;
+  const insightEarned = summary?.insightEarned ?? 0;
+  const insightTotal = summary?.insightTotal;
+  const newly = summary?.newlyUnlocked ?? [];
+  const mastery = Object.entries(summary?.masteryByTopic ?? {}).sort(
+    (a, b) => b[1].accuracy - a[1].accuracy,
+  );
+  const isBest = summary?.bestScore != null && score > 0 && score >= summary.bestScore;
+
   return (
-    <Centered>
-      <motion.div
-        initial={{ opacity: 0, scale: 0.9 }}
-        animate={{ opacity: 1, scale: 1 }}
-        className="max-w-md text-center"
-      >
+    <div className="mx-auto flex w-full max-w-lg flex-1 flex-col items-center justify-center gap-5 px-5 py-10 text-center">
+      <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}>
         <div className="text-5xl">{win ? "🏆" : "💀"}</div>
         <h1 className={`mt-3 text-3xl font-extrabold ${win ? "text-amber-300" : "text-rose-300"}`}>
           {win ? "Campaign Cleared!" : "Run Over"}
         </h1>
-        <p className="mt-4 text-zinc-300">
-          Score {player.score} · XP {player.xp} · Level {player.level} · HP {player.hp}
+        <p className="mt-3 text-zinc-300">
+          Score {score} · XP {xp} · Level {level}
         </p>
-        <div className="mt-6 flex justify-center gap-3">
-          {game && (
-            <button
-              onClick={() => start(game.campaignId)}
-              className="rounded-lg bg-amber-500 px-5 py-3 font-semibold text-zinc-950 hover:bg-amber-400"
-            >
-              New run
-            </button>
-          )}
-          <Link
-            href="/"
-            className="rounded-lg border border-zinc-700 px-5 py-3 text-zinc-200 hover:bg-zinc-800"
-          >
-            Home
-          </Link>
-        </div>
+        {isBest && <p className="mt-1 text-sm font-semibold text-amber-300">🏅 New personal best!</p>}
       </motion.div>
-    </Centered>
+
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.1 }}
+        className="w-full rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5 text-left"
+      >
+        <div className="flex items-center justify-between">
+          <span className="font-semibold text-sky-300">🔮 Insight earned</span>
+          <span className="text-lg font-bold text-sky-200">+{insightEarned}</span>
+        </div>
+        {insightTotal != null && (
+          <p className="mt-0.5 text-xs text-zinc-500">{insightTotal} total banked</p>
+        )}
+
+        {mastery.length > 0 && (
+          <div className="mt-4">
+            <p className="mb-2 text-xs uppercase tracking-wide text-zinc-500">Topic mastery</p>
+            <div className="flex flex-col gap-2">
+              {mastery.map(([topic, m]) => (
+                <div key={topic} className="flex items-center gap-3">
+                  <span className="w-32 shrink-0 truncate text-sm text-zinc-300" title={topic}>
+                    {topic}
+                  </span>
+                  <div className="h-2 flex-1 overflow-hidden rounded-full bg-zinc-800">
+                    <div
+                      className={`h-full ${m.accuracy >= 0.8 ? "bg-emerald-500" : "bg-amber-500"}`}
+                      style={{ width: `${Math.round(m.accuracy * 100)}%` }}
+                    />
+                  </div>
+                  <span className="w-10 shrink-0 text-right text-xs text-zinc-400">
+                    {Math.round(m.accuracy * 100)}%
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {newly.length > 0 && (
+          <div className="mt-4">
+            <p className="mb-2 text-xs uppercase tracking-wide text-zinc-500">Relics unlocked</p>
+            <div className="flex flex-wrap gap-1.5">
+              {newly.map((r) => (
+                <span
+                  key={r.relicId}
+                  title={r.description}
+                  className="flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-xs text-amber-200"
+                >
+                  <span>{r.icon}</span>
+                  {r.name}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <p className="mt-4 border-t border-zinc-800 pt-3 text-xs italic text-zinc-500">
+          Insight rewards what you learned, not how long you played. Relics never answer for you.
+        </p>
+      </motion.div>
+
+      <div className="flex justify-center gap-3">
+        {game && (
+          <button
+            onClick={() => start(game.campaignId)}
+            className="rounded-lg bg-amber-500 px-5 py-3 font-semibold text-zinc-950 hover:bg-amber-400"
+          >
+            New run
+          </button>
+        )}
+        <Link
+          href="/"
+          className="rounded-lg border border-zinc-700 px-5 py-3 text-zinc-200 hover:bg-zinc-800"
+        >
+          Home
+        </Link>
+      </div>
+    </div>
   );
 }
